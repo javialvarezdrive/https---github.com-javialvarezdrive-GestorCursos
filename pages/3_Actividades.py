@@ -38,7 +38,6 @@ with tab1:
         # Obtener listas de filtros posibles
         cursos = []
         monitores = []
-        secciones = []
         all_participants = []
         
         # Recopilar datos para filtros
@@ -46,17 +45,13 @@ with tab1:
             # Obtener nombre del curso
             try:
                 if activity['curso_id']:
-                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre", "seccion").eq("id", activity['curso_id']).execute()
-                    if curso_response.data:
-                        curso_info = curso_response.data[0]
-                        curso_nombre = curso_info['nombre']
-                        seccion = curso_info.get('seccion', 'Sin sección')
+                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
+                    if curso_response.data and len(curso_response.data) > 0:
+                        curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
                         if curso_nombre and curso_nombre not in cursos:
                             cursos.append(curso_nombre)
-                        if seccion and seccion not in secciones:
-                            secciones.append(seccion)
-            except:
-                pass
+            except Exception as e:
+                print(f"Error al obtener curso para filtros: {str(e)}")
                 
             # Obtener monitor
             try:
@@ -81,7 +76,6 @@ with tab1:
         # Ordenar las listas para los filtros
         cursos.sort()
         monitores.sort()
-        secciones.sort()
         all_participants.sort()
         
         # Definir fechas por defecto
@@ -102,9 +96,6 @@ with tab1:
                 # Filtro de cursos
                 filtro_curso = st.multiselect("Filtrar por curso", ["Todos"] + cursos, default="Todos")
                 
-                # Filtro de sección
-                filtro_seccion = st.multiselect("Filtrar por sección", ["Todas"] + secciones, default="Todas")
-                
             with col3:
                 # Filtro de monitor
                 filtro_monitor = st.multiselect("Filtrar por monitor", ["Todos"] + monitores, default="Todos")
@@ -118,20 +109,15 @@ with tab1:
         
         # Process each activity to get full information
         for idx, activity in activities_df.iterrows():
-            # Get course name and section
+            # Get course name
             try:
                 curso_nombre = "Sin curso"
-                seccion = "Sin sección"
                 if activity['curso_id'] is not None:
-                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre", "seccion").eq("id", activity['curso_id']).execute()
+                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
                     if curso_response.data and len(curso_response.data) > 0:
-                        curso_info = curso_response.data[0]
-                        curso_nombre = curso_info.get('nombre', 'Sin nombre')
-                        seccion = curso_info.get('seccion', 'Sin sección')
+                        curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
             except Exception as e:
-                st.error(f"Error al obtener el curso: {str(e)}")
                 curso_nombre = "Sin curso"
-                seccion = "Sin sección"
             
             # Get monitor name
             try:
@@ -174,9 +160,7 @@ with tab1:
             if "Todos" not in filtro_monitor and monitor_name not in filtro_monitor:
                 pasa_filtro = False
                 
-            # Filtro de sección
-            if "Todas" not in filtro_seccion and seccion not in filtro_seccion:
-                pasa_filtro = False
+
                 
             # Filtro de participante
             if "Todos" not in filtro_participante:
