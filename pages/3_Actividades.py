@@ -240,18 +240,41 @@ with tab_anadir:
         with col1:
             fecha = st.date_input("Fecha *", datetime.now())
             turno = st.selectbox("Turno *", [""] + config.SHIFTS)
+            
+            # Expandir para mostrar campos adicionales
+            with st.expander("Asignar agentes (opcional)", expanded=False):
+                # Get all active agents
+                agents_df = utils.get_all_agents(active_only=True)
+                
+                if not agents_df.empty:
+                    # Create multiselect with all agents
+                    agent_options = {f"{agent['nip']} - {agent['nombre']} {agent['apellido1']} {agent['apellido2']}".strip(): agent['nip'] for _, agent in agents_df.iterrows()}
+                    
+                    selected_agents = st.multiselect(
+                        "Seleccionar agentes participantes",
+                        options=list(agent_options.keys())
+                    )
+                    
+                    # Convert selections to NIPs
+                    selected_nips = [agent_options[agent] for agent in selected_agents]
+                else:
+                    st.warning("No hay agentes activos disponibles.")
+                    selected_nips = []
         
         with col2:
             # Get available courses
             courses_df = utils.get_all_courses()
-            course_options = [""] + [f"{course['id']} - {course['nombre']}" for _, course in courses_df.iterrows()] if not courses_df.empty else [""]
+            course_options = [""] + [f"{course['nombre']}" for _, course in courses_df.iterrows()] if not courses_df.empty else [""]
             
-            selected_course = st.selectbox("Curso", course_options)
+            selected_course_name = st.selectbox("Curso", course_options)
             
             # Extract course ID from selection
             curso_id = None
-            if selected_course and selected_course != "":
-                curso_id = int(selected_course.split(" - ")[0])
+            if selected_course_name and selected_course_name != "":
+                # Buscar el ID del curso por su nombre
+                course_row = courses_df[courses_df['nombre'] == selected_course_name]
+                if not course_row.empty:
+                    curso_id = course_row.iloc[0]['id']
             
             # Get user NIP as default monitor
             user_nip = None
@@ -264,22 +287,28 @@ with tab_anadir:
             
             # Get monitors for selection
             monitors_df = utils.get_all_monitors()
-            monitor_options = [""] + [f"{monitor['nip']} - {monitor['nombre']} {monitor['apellido1']}" for _, monitor in monitors_df.iterrows()] if not monitors_df.empty else [""]
+            monitor_options = [""] + [f"{monitor['nombre']} {monitor['apellido1']}" for _, monitor in monitors_df.iterrows()] if not monitors_df.empty else [""]
             
             # Find index of user_nip in monitor_options
             default_index = 0
             if user_nip:
                 for i, option in enumerate(monitor_options):
-                    if option and option.startswith(f"{user_nip} -"):
-                        default_index = i
-                        break
+                    if i > 0:  # Saltamos la opción vacía
+                        monitor_row = monitors_df.iloc[i-1]
+                        if monitor_row['nip'] == user_nip:
+                            default_index = i
+                            break
             
-            selected_monitor = st.selectbox("Monitor", monitor_options, index=default_index)
+            selected_monitor_name = st.selectbox("Monitor", monitor_options, index=default_index)
             
             # Extract monitor NIP from selection
             monitor_nip = None
-            if selected_monitor and selected_monitor != "":
-                monitor_nip = selected_monitor.split(" - ")[0]
+            if selected_monitor_name and selected_monitor_name != "":
+                # Buscar el NIP del monitor por su nombre
+                for _, monitor in monitors_df.iterrows():
+                    if f"{monitor['nombre']} {monitor['apellido1']}" == selected_monitor_name:
+                        monitor_nip = monitor['nip']
+                        break
             
         # Submit button
         submitted = st.form_submit_button("Añadir Actividad")
@@ -311,7 +340,25 @@ with tab_anadir:
                         result = config.supabase.table(config.ACTIVITIES_TABLE).insert(activity_data).execute()
                         
                         if result.data:
-                            st.success(f"Actividad añadida correctamente para el {fecha.strftime('%d/%m/%Y')} en turno {turno}")
+                            # Obtener ID de la actividad creada
+                            activity_id = result.data[0]['id']
+                            
+                            # Si hay participantes seleccionados, guardarlos
+                            if 'selected_nips' in locals() and selected_nips:
+                                try:
+                                    for nip in selected_nips:
+                                        participant_data = {
+                                            'activity_id': activity_id,
+                                            'agent_nip': nip
+                                        }
+                                        config.supabase.table(config.PARTICIPANTS_TABLE).insert(participant_data).execute()
+                                        
+                                    st.success(f"Actividad añadida correctamente para el {fecha.strftime('%d/%m/%Y')} en turno {turno} con {len(selected_nips)} participantes")
+                                except Exception as e:
+                                    st.warning(f"Actividad creada pero hubo un error al asignar participantes: {str(e)}")
+                            else:
+                                st.success(f"Actividad añadida correctamente para el {fecha.strftime('%d/%m/%Y')} en turno {turno}")
+                                
                             # Actualizar DataFrame en session_state
                             st.session_state.activities_df = utils.get_all_activities()
                             st.rerun()
@@ -404,150 +451,91 @@ with tab_editar:
                         st.session_state.activity_to_delete_id = None
                         st.rerun()
             
-            # Si no estamos en modo de confirmación, mostrar el formulario de edición
-            tabs_edicion = st.tabs(["Datos de la actividad", "Gestión de participantes"])
-            
-            with tabs_edicion[0]:
-                with st.form("edit_activity_form"):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        # Convert string date to datetime
-                        try:
-                            current_date = datetime.strptime(activity_data['fecha'], "%Y-%m-%d")
-                        except:
-                            current_date = datetime.now()
-                        
-                        fecha = st.date_input("Fecha *", current_date)
-                        turno = st.selectbox(
-                            "Turno *", 
-                            config.SHIFTS,
-                            index=config.SHIFTS.index(activity_data['turno']) if activity_data['turno'] in config.SHIFTS else 0
-                        )
-                    
-                    with col2:
-                        # Get available courses
-                        courses_df = utils.get_all_courses()
-                        course_options = [""] + [f"{course['id']} - {course['nombre']}" for _, course in courses_df.iterrows()] if not courses_df.empty else [""]
-                        
-                        # Determine default course selection
-                        default_course_index = 0
-                        current_course_id = activity_data['curso_id']
-                        if current_course_id:
-                            for i, option in enumerate(course_options):
-                                if option and option.startswith(f"{current_course_id} -"):
-                                    default_course_index = i
-                                    break
-                        
-                        selected_course = st.selectbox("Curso", course_options, index=default_course_index)
-                        
-                        # Extract course ID from selection
-                        curso_id = None
-                        if selected_course and selected_course != "":
-                            curso_id = int(selected_course.split(" - ")[0])
-                        
-                        # Get monitors for selection
-                        monitors_df = utils.get_all_monitors()
-                        monitor_options = [""] + [f"{monitor['nip']} - {monitor['nombre']} {monitor['apellido1']}" for _, monitor in monitors_df.iterrows()] if not monitors_df.empty else [""]
-                        
-                        # Determine default monitor selection
-                        default_monitor_index = 0
-                        current_monitor_nip = activity_data['monitor_nip']
-                        if current_monitor_nip:
-                            for i, option in enumerate(monitor_options):
-                                if option and option.startswith(f"{current_monitor_nip} -"):
-                                    default_monitor_index = i
-                                    break
-                        
-                        selected_monitor = st.selectbox("Monitor", monitor_options, index=default_monitor_index)
-                        
-                        # Extract monitor NIP from selection
-                        monitor_nip = None
-                        if selected_monitor and selected_monitor != "":
-                            monitor_nip = selected_monitor.split(" - ")[0]
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        submit_button = st.form_submit_button("Actualizar Actividad")
-                    with col2:
-                        delete_button = st.form_submit_button("Eliminar Actividad", type="secondary")
-                    
-                    if submit_button:
-                        # Validate form data
-                        validation_errors = utils.validate_activity(fecha, turno)
-                        
-                        if validation_errors:
-                            for error in validation_errors:
-                                st.error(error)
-                        else:
-                            # Check if activity already exists on the same date and shift (excluding this one)
-                            try:
-                                existing_activity = config.supabase.table(config.ACTIVITIES_TABLE).select("*").eq("fecha", fecha.strftime("%Y-%m-%d")).eq("turno", turno).neq("id", selected_activity_id).execute()
-                                
-                                if existing_activity.data:
-                                    st.error(f"Ya existe otra actividad programada para esa fecha y turno")
-                                else:
-                                    # Prepare updated data
-                                    updated_data = {
-                                        'fecha': fecha.strftime("%Y-%m-%d"),
-                                        'turno': turno,
-                                        'curso_id': curso_id,
-                                        'monitor_nip': monitor_nip
-                                    }
-                                    
-                                    # Update data
-                                    result = config.supabase.table(config.ACTIVITIES_TABLE).update(updated_data).eq("id", selected_activity_id).execute()
-                                    
-                                    if result.data:
-                                        st.success(f"Actividad actualizada correctamente")
-                                        # Actualizar DataFrame en session_state
-                                        st.session_state.activities_df = utils.get_all_activities()
-                                        st.rerun()
-                                    else:
-                                        st.error("Error al actualizar la actividad")
-                            except Exception as e:
-                                st.error(f"Error: {str(e)}")
-                    
-                    if delete_button:
-                        # Activar modo de confirmación
-                        st.session_state.activity_confirm_delete = True
-                        st.session_state.activity_to_delete_id = selected_activity_id
-                        st.rerun()
-                        
-            # Tab para gestionar participantes
-            with tabs_edicion[1]:
-                st.subheader("Gestión de Participantes")
+            # Si no estamos en modo de confirmación, mostrar el formulario de edición unificado
+            # En lugar de usar tabs, mostramos todo en una sola vista
+            with st.form("edit_activity_form"):
+                # Sección de datos básicos
+                st.subheader("Datos de la actividad")
                 
-                # Mostrar detalles de la actividad seleccionada
                 col1, col2 = st.columns(2)
+                
                 with col1:
-                    st.write(f"**Fecha:** {utils.format_date(activity_data['fecha'])}")
-                    st.write(f"**Turno:** {activity_data['turno']}")
+                    # Convert string date to datetime
+                    try:
+                        current_date = datetime.strptime(activity_data['fecha'], "%Y-%m-%d")
+                    except:
+                        current_date = datetime.now()
+                    
+                    fecha = st.date_input("Fecha *", current_date)
+                    turno = st.selectbox(
+                        "Turno *", 
+                        config.SHIFTS,
+                        index=config.SHIFTS.index(activity_data['turno']) if activity_data['turno'] in config.SHIFTS else 0
+                    )
                 
                 with col2:
-                    # Get course details
-                    try:
-                        curso_nombre = "Sin curso asignado"
-                        if activity_data['curso_id'] is not None:
-                            curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity_data['curso_id']).execute()
-                            if curso_response.data and len(curso_response.data) > 0:
-                                curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
-                            st.write(f"**Curso:** {curso_nombre}")
-                        else:
-                            st.write("**Curso:** Sin curso asignado")
-                    except Exception as e:
-                        st.error(f"Error al obtener el curso para los detalles: {str(e)}")
-                        st.write("**Curso:** Sin curso asignado")
+                    # Get available courses
+                    courses_df = utils.get_all_courses()
+                    # Ya no mostramos el ID del curso, solo el nombre
+                    course_options = [""] + [f"{course['nombre']}" for _, course in courses_df.iterrows()] if not courses_df.empty else [""]
                     
-                    # Get monitor details
-                    try:
-                        if activity_data['monitor_nip']:
-                            monitor_name = utils.get_agent_name(activity_data['monitor_nip'])
-                            st.write(f"**Monitor:** {monitor_name}")
-                        else:
-                            st.write("**Monitor:** Sin monitor asignado")
-                    except:
-                        st.write("**Monitor:** Error al cargar")
+                    # Determine default course selection
+                    default_course_index = 0
+                    current_course_id = activity_data['curso_id']
+                    current_course_name = ""
+                    
+                    if current_course_id:
+                        # Encontrar el nombre del curso actual
+                        current_course_name = utils.get_course_name(current_course_id)
+                        # Buscar el índice por nombre
+                        for i, option in enumerate(course_options):
+                            if option == current_course_name:
+                                default_course_index = i
+                                break
+                    
+                    selected_course_name = st.selectbox("Curso", course_options, index=default_course_index)
+                    
+                    # Extract course ID from selection by name
+                    curso_id = None
+                    if selected_course_name and selected_course_name != "":
+                        # Buscar el ID por el nombre del curso
+                        for _, course in courses_df.iterrows():
+                            if course['nombre'] == selected_course_name:
+                                curso_id = course['id']
+                                break
+                    
+                    # Get monitors for selection
+                    monitors_df = utils.get_all_monitors()
+                    # Ya no mostramos el NIP del monitor, solo el nombre
+                    monitor_options = [""] + [f"{monitor['nombre']} {monitor['apellido1']}" for _, monitor in monitors_df.iterrows()] if not monitors_df.empty else [""]
+                    
+                    # Determine default monitor selection
+                    default_monitor_index = 0
+                    current_monitor_nip = activity_data['monitor_nip']
+                    current_monitor_name = ""
+                    
+                    if current_monitor_nip:
+                        # Encontrar el nombre del monitor actual
+                        current_monitor_name = utils.get_agent_name(current_monitor_nip)
+                        # Buscar el índice por nombre (aproximado, solo nombre y primer apellido)
+                        for i, option in enumerate(monitor_options):
+                            if i > 0 and option in current_monitor_name:  # Saltamos la opción vacía
+                                default_monitor_index = i
+                                break
+                    
+                    selected_monitor_name = st.selectbox("Monitor", monitor_options, index=default_monitor_index)
+                    
+                    # Extract monitor NIP from selection by name
+                    monitor_nip = None
+                    if selected_monitor_name and selected_monitor_name != "":
+                        # Buscar el NIP por el nombre del monitor
+                        for _, monitor in monitors_df.iterrows():
+                            if f"{monitor['nombre']} {monitor['apellido1']}" == selected_monitor_name:
+                                monitor_nip = monitor['nip']
+                                break
+                
+                # Sección de participantes
+                st.subheader("Gestión de Participantes")
                 
                 # Get current participants
                 current_participants = []
@@ -557,69 +545,94 @@ with tab_editar:
                 except Exception as e:
                     st.error(f"Error al cargar participantes: {str(e)}")
                 
-                # Si hay participantes actuales, mostrarlos
-                if current_participants:
-                    participant_names = []
-                    for nip in current_participants:
-                        participant_names.append(utils.get_agent_name(nip))
-                    
-                    st.write("### Participantes actuales")
-                    cols_participants = st.columns(min(3, len(participant_names)))
-                    for i, name in enumerate(participant_names):
-                        with cols_participants[i % 3]:
-                            st.markdown(f"**{i+1}.** {name}")
-                else:
-                    st.info("Esta actividad no tiene participantes asignados.")
-                
                 # Get all active agents
                 agents_df = utils.get_all_agents(active_only=True)
                 
                 if not agents_df.empty:
-                    st.write("### Seleccionar Participantes")
-                    
                     # Create multiselect with all agents
-                    agent_options = {f"{agent['nip']} - {agent['nombre']} {agent['apellido1']} {agent['apellido2']}".strip(): agent['nip'] for _, agent in agents_df.iterrows()}
+                    agent_options = {f"{agent['nombre']} {agent['apellido1']} {agent['apellido2']}".strip(): agent['nip'] for _, agent in agents_df.iterrows()}
                     
-                    # Determine default selections
+                    # Determine default selections by NIP
                     default_values = []
-                    for option, nip in agent_options.items():
+                    for agent_name, nip in agent_options.items():
                         if nip in current_participants:
-                            default_values.append(option)
+                            default_values.append(agent_name)
                     
-                    # Usar formulario para gestionar participantes
-                    with st.form("participantes_form"):
-                        selected_agents = st.multiselect(
-                            "Seleccionar agentes participantes",
-                            options=list(agent_options.keys()),
-                            default=default_values
-                        )
-                        
-                        # Convert selections to NIPs
-                        selected_nips = [agent_options[agent] for agent in selected_agents]
-                        
-                        # Save button
-                        save_participants = st.form_submit_button("Guardar Participantes")
-                        
-                        if save_participants:
-                            try:
-                                # First delete all current participants
-                                config.supabase.table(config.PARTICIPANTS_TABLE).delete().eq("activity_id", selected_activity_id).execute()
-                                
-                                # Then add new participants
-                                for nip in selected_nips:
-                                    participant_data = {
-                                        'activity_id': selected_activity_id,
-                                        'agent_nip': nip
-                                    }
-                                    config.supabase.table(config.PARTICIPANTS_TABLE).insert(participant_data).execute()
-                                
-                                st.success("Participantes actualizados correctamente")
-                                # Actualizar DataFrame en session_state
-                                st.session_state.activities_df = utils.get_all_activities()
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error al actualizar participantes: {str(e)}")
+                    selected_agents = st.multiselect(
+                        "Seleccionar agentes participantes",
+                        options=list(agent_options.keys()),
+                        default=default_values
+                    )
+                    
+                    # Convert selections to NIPs
+                    selected_nips = [agent_options[agent] for agent in selected_agents]
                 else:
                     st.warning("No hay agentes activos disponibles.")
+                    selected_nips = []
+                
+                # Botones en una fila
+                col1, col2 = st.columns(2)
+                with col1:
+                    submit_button = st.form_submit_button("Guardar Cambios")
+                with col2:
+                    delete_button = st.form_submit_button("Eliminar Actividad", type="secondary")
+                
+                if submit_button:
+                    # Validate form data
+                    validation_errors = utils.validate_activity(fecha, turno)
+                    
+                    if validation_errors:
+                        for error in validation_errors:
+                            st.error(error)
+                    else:
+                        # Check if activity already exists on the same date and shift (excluding this one)
+                        try:
+                            existing_activity = config.supabase.table(config.ACTIVITIES_TABLE).select("*").eq("fecha", fecha.strftime("%Y-%m-%d")).eq("turno", turno).neq("id", selected_activity_id).execute()
+                            
+                            if existing_activity.data:
+                                st.error(f"Ya existe otra actividad programada para esa fecha y turno")
+                            else:
+                                # Prepare updated data
+                                updated_data = {
+                                    'fecha': fecha.strftime("%Y-%m-%d"),
+                                    'turno': turno,
+                                    'curso_id': curso_id,
+                                    'monitor_nip': monitor_nip
+                                }
+                                
+                                # Update activity data
+                                result = config.supabase.table(config.ACTIVITIES_TABLE).update(updated_data).eq("id", selected_activity_id).execute()
+                                
+                                if result.data:
+                                    # Update participants
+                                    try:
+                                        # First delete all current participants
+                                        config.supabase.table(config.PARTICIPANTS_TABLE).delete().eq("activity_id", selected_activity_id).execute()
+                                        
+                                        # Then add new participants
+                                        for nip in selected_nips:
+                                            participant_data = {
+                                                'activity_id': selected_activity_id,
+                                                'agent_nip': nip
+                                            }
+                                            config.supabase.table(config.PARTICIPANTS_TABLE).insert(participant_data).execute()
+                                        
+                                        st.success(f"Actividad actualizada correctamente con {len(selected_nips)} participantes")
+                                    except Exception as e:
+                                        st.warning(f"Actividad actualizada pero hubo un error al gestionar participantes: {str(e)}")
+                                    
+                                    # Actualizar DataFrame en session_state
+                                    st.session_state.activities_df = utils.get_all_activities()
+                                    st.rerun()
+                                else:
+                                    st.error("Error al actualizar la actividad")
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                
+                if delete_button:
+                    # Activar modo de confirmación
+                    st.session_state.activity_confirm_delete = True
+                    st.session_state.activity_to_delete_id = selected_activity_id
+                    st.rerun()
     else:
         st.warning("No hay actividades disponibles para editar.")
