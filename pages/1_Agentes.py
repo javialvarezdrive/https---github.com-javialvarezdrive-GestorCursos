@@ -6,11 +6,43 @@ import utils
 # Check authentication
 utils.check_authentication()
 
+# Inicialización del estado de la sesión para la gestión de pestañas activas
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = "Ver Agentes"
+
+# Inicializar el DataFrame de agentes en el estado de la sesión
+if "agents_df" not in st.session_state:
+    st.session_state.agents_df = utils.get_all_agents()
+
+# Inicializar estados para el modo de confirmación de eliminación
+if "confirm_delete_mode" not in st.session_state:
+    st.session_state.confirm_delete_mode = False
+    
+if "agent_to_delete" not in st.session_state:
+    st.session_state.agent_to_delete = None
+    
+if "agent_delete_info" not in st.session_state:
+    st.session_state.agent_delete_info = None
+
 # Page title
 st.title("👮‍♂️ Gestión de Agentes")
 
 # Create tabs
 tab1, tab2, tab3 = st.tabs(["Ver Agentes", "Añadir Agente", "Editar Agente"])
+
+# Define una función para cambiar la pestaña activa
+def set_active_tab(tab_name):
+    st.session_state.active_tab = tab_name
+    # Recargar el DataFrame de agentes para reflejar los cambios
+    st.session_state.agents_df = utils.get_all_agents()
+
+# Seleccionar la pestaña activa basada en el estado de la sesión
+if st.session_state.active_tab == "Ver Agentes":
+    tab1.active = True
+elif st.session_state.active_tab == "Añadir Agente":
+    tab2.active = True
+elif st.session_state.active_tab == "Editar Agente":
+    tab3.active = True
 
 # Tab 1: View Agents
 with tab1:
@@ -19,8 +51,8 @@ with tab1:
     # Search functionality
     search_query = st.text_input("Buscar agente (NIP, nombre, apellidos...)", "")
     
-    # Get agents data
-    agents_df = utils.get_all_agents()
+    # Usar el DataFrame almacenado en session_state
+    agents_df = st.session_state.agents_df
     
     if not agents_df.empty:
         # Apply search filter if provided
@@ -128,8 +160,8 @@ with tab2:
                             'apellido2': apellido2,
                             'email': email,
                             'telefono': telefono,
-                            'seccion': seccion,
-                            'grupo': grupo,
+                            'seccion': seccion if seccion else None,
+                            'grupo': grupo if grupo else None,
                             'activo': activo,
                             'monitor': monitor
                         }
@@ -139,6 +171,10 @@ with tab2:
                         
                         if result.data:
                             st.success(f"Agente {nombre} {apellido1} añadido correctamente")
+                            # Actualizar el DataFrame en session_state y cambiar a la pestaña de visualización
+                            st.session_state.agents_df = utils.get_all_agents()
+                            set_active_tab("Ver Agentes")
+                            st.rerun()
                         else:
                             st.error("Error al añadir el agente")
                 except Exception as e:
@@ -148,8 +184,8 @@ with tab2:
 with tab3:
     st.subheader("Editar Agente Existente")
     
-    # Get all agents for selection
-    agents_df = utils.get_all_agents()
+    # Get all agents for selection from session state
+    agents_df = st.session_state.agents_df
     
     if not agents_df.empty:
         # Create a dropdown to select an agent by NIP
@@ -175,103 +211,125 @@ with tab3:
             # Get agent data
             agent_data = agents_df[agents_df['nip'] == selected_nip].iloc[0].to_dict()
             
-            # Create form for editing
-            # Delete button outside the form
-            delete_button = st.button("Eliminar Agente", type="secondary")
-            
-            with st.form("edit_agent_form"):
+            # Si estamos en modo de confirmación de eliminación para este agente
+            if st.session_state.confirm_delete_mode and st.session_state.agent_to_delete == selected_nip:
+                st.warning(f"¿Estás seguro de que deseas eliminar al agente {st.session_state.agent_delete_info}?")
+                
                 col1, col2 = st.columns(2)
-                
                 with col1:
-                    nip = st.text_input("NIP *", agent_data['nip'], disabled=True)
-                    nombre = st.text_input("Nombre *", agent_data['nombre'])
-                    apellido1 = st.text_input("Primer Apellido *", agent_data['apellido1'])
-                    apellido2 = st.text_input("Segundo Apellido", agent_data['apellido2'])
-                    email = st.text_input("Email", agent_data['email'])
-                
-                with col2:
-                    telefono = st.text_input("Teléfono", agent_data['telefono'])
-                    seccion = st.selectbox("Sección", [""] + config.SECTIONS, 
-                                           index=0 if not agent_data['seccion'] else config.SECTIONS.index(agent_data['seccion'])+1)
-                    grupo = st.selectbox("Grupo", [""] + config.GROUPS, 
-                                        index=0 if not agent_data['grupo'] else config.GROUPS.index(agent_data['grupo'])+1)
-                    activo = st.checkbox("Activo", agent_data['activo'])
-                    monitor = st.checkbox("Monitor", agent_data['monitor'])
-                
-                submit_button = st.form_submit_button("Actualizar Agente")
-                
-                if submit_button:
-                    # Validate form data
-                    validation_errors = utils.validate_agent(nip, nombre, apellido1, email, telefono)
-                    
-                    if validation_errors:
-                        for error in validation_errors:
-                            st.error(error)
-                    else:
-                        # Prepare updated data
-                        updated_data = {
-                            'nombre': nombre,
-                            'apellido1': apellido1,
-                            'apellido2': apellido2,
-                            'email': email,
-                            'telefono': telefono,
-                            'seccion': seccion,
-                            'grupo': grupo,
-                            'activo': activo,
-                            'monitor': monitor
-                        }
-                        
+                    if st.button("Sí, eliminar"):
                         try:
-                            # Update data
-                            result = config.supabase.table(config.AGENTS_TABLE).update(updated_data).eq("nip", nip).execute()
+                            # Delete agent
+                            result = config.supabase.table(config.AGENTS_TABLE).delete().eq("nip", st.session_state.agent_to_delete).execute()
                             
                             if result.data:
-                                st.success(f"Agente {nombre} {apellido1} actualizado correctamente")
+                                st.success(f"Agente {st.session_state.agent_delete_info} eliminado correctamente")
+                                # Limpiar estado y actualizar
+                                st.session_state.confirm_delete_mode = False
+                                st.session_state.agent_to_delete = None
+                                st.session_state.agent_delete_info = None
+                                # Recrear el DataFrame para reflejar los cambios
+                                st.session_state.agents_df = utils.get_all_agents()
+                                # Cambiar a la pestaña de visualización
+                                set_active_tab("Ver Agentes")
+                                st.rerun()
                             else:
-                                st.error("Error al actualizar el agente")
+                                st.error("Error al eliminar el agente")
                         except Exception as e:
                             st.error(f"Error: {str(e)}")
                 
-                if delete_button:
-                    # Define key for tracking deletion confirmation for this agent
-                    confirm_delete_key = f"confirm_delete_{nip}"
+                with col2:
+                    if st.button("No, cancelar"):
+                        # Limpiar modo de confirmación
+                        st.session_state.confirm_delete_mode = False
+                        st.session_state.agent_to_delete = None
+                        st.session_state.agent_delete_info = None
+                        st.rerun()
+            
+            # Si no estamos en modo de confirmación, mostrar el formulario de edición
+            else:
+                # Botón de eliminar fuera del formulario
+                delete_button = st.button("Eliminar Agente", type="secondary")
+                
+                # Formulario para edición
+                with st.form("edit_agent_form"):
+                    col1, col2 = st.columns(2)
                     
-                    # Initialize key in session state if it doesn't exist
-                    if confirm_delete_key not in st.session_state:
-                        st.session_state[confirm_delete_key] = False
+                    with col1:
+                        nip = st.text_input("NIP *", agent_data['nip'], disabled=True)
+                        nombre = st.text_input("Nombre *", agent_data['nombre'])
+                        apellido1 = st.text_input("Primer Apellido *", agent_data['apellido1'])
+                        apellido2 = st.text_input("Segundo Apellido", agent_data['apellido2'])
+                        email = st.text_input("Email", agent_data['email'])
                     
-                    # Delete agent confirmation
-                    st.warning(f"¿Estás seguro de que deseas eliminar al agente {nombre} {apellido1}?")
-                    
-                    # Create a form for confirmation buttons
-                    with st.form(key=f"confirm_delete_form_{nip}", clear_on_submit=True):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            confirm_yes = st.form_submit_button("Sí, eliminar")
-                        with col2:
-                            confirm_no = st.form_submit_button("No, cancelar")
+                    with col2:
+                        telefono = st.text_input("Teléfono", agent_data['telefono'])
                         
-                        if confirm_yes:
+                        # Manejar correctamente el caso en que el valor no esté en la lista
+                        seccion_index = 0
+                        if agent_data['seccion']:
                             try:
-                                # Delete agent
-                                result = config.supabase.table(config.AGENTS_TABLE).delete().eq("nip", nip).execute()
+                                seccion_index = config.SECTIONS.index(agent_data['seccion'])+1
+                            except ValueError:
+                                seccion_index = 0
+                        
+                        seccion = st.selectbox("Sección", [""] + config.SECTIONS, index=seccion_index)
+                        
+                        # Manejar correctamente el caso en que el valor no esté en la lista
+                        grupo_index = 0
+                        if agent_data['grupo']:
+                            try:
+                                grupo_index = config.GROUPS.index(agent_data['grupo'])+1
+                            except ValueError:
+                                grupo_index = 0
+                                
+                        grupo = st.selectbox("Grupo", [""] + config.GROUPS, index=grupo_index)
+                        activo = st.checkbox("Activo", agent_data['activo'])
+                        monitor = st.checkbox("Monitor", agent_data['monitor'])
+                    
+                    submit_button = st.form_submit_button("Actualizar Agente")
+                    
+                    if submit_button:
+                        # Validate form data
+                        validation_errors = utils.validate_agent(nip, nombre, apellido1, email, telefono)
+                        
+                        if validation_errors:
+                            for error in validation_errors:
+                                st.error(error)
+                        else:
+                            try:
+                                # Prepare updated data
+                                updated_data = {
+                                    'nombre': nombre,
+                                    'apellido1': apellido1,
+                                    'apellido2': apellido2,
+                                    'email': email,
+                                    'telefono': telefono,
+                                    'seccion': seccion if seccion else None,
+                                    'grupo': grupo if grupo else None,
+                                    'activo': activo,
+                                    'monitor': monitor
+                                }
+                                
+                                # Update agent data
+                                result = config.supabase.table(config.AGENTS_TABLE).update(updated_data).eq("nip", nip).execute()
                                 
                                 if result.data:
-                                    st.session_state[confirm_delete_key] = True
-                                    st.success(f"Agente {nombre} {apellido1} eliminado correctamente")
-                                    # Use a rerun flag in session state
-                                    st.session_state.need_rerun = True
+                                    st.success("Agente actualizado correctamente")
+                                    # Actualizar el DataFrame en session_state para reflejar los cambios
+                                    st.session_state.agents_df = utils.get_all_agents()
+                                    st.rerun()
                                 else:
-                                    st.error("Error al eliminar el agente")
+                                    st.error("Error al actualizar el agente")
                             except Exception as e:
                                 st.error(f"Error: {str(e)}")
-                        
-                        if confirm_no:
-                            st.session_state[confirm_delete_key] = False
-                    
-                    # Check if rerun is needed
-                    if st.session_state.get("need_rerun", False):
-                        st.session_state.need_rerun = False
-                        st.rerun()
+                
+                # Manejar el botón de eliminar (fuera del formulario)
+                if delete_button:
+                    # Activar modo de confirmación
+                    st.session_state.confirm_delete_mode = True
+                    st.session_state.agent_to_delete = nip
+                    st.session_state.agent_delete_info = f"{nombre} {apellido1}"
+                    st.rerun()
     else:
         st.warning("No hay agentes disponibles para editar.")
