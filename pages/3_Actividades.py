@@ -108,91 +108,91 @@ with tab2:
     
     # Todos los usuarios autenticados pueden programar actividades
     # Create form
-        with st.form("add_activity_form"):
-            col1, col2 = st.columns(2)
+    with st.form("add_activity_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fecha = st.date_input("Fecha *", datetime.now())
+            turno = st.selectbox("Turno *", [""] + config.SHIFTS)
+        
+        with col2:
+            # Get available courses
+            courses_df = utils.get_all_courses()
+            course_options = [""] + [f"{course['id']} - {course['nombre']}" for _, course in courses_df.iterrows()] if not courses_df.empty else [""]
             
-            with col1:
-                fecha = st.date_input("Fecha *", datetime.now())
-                turno = st.selectbox("Turno *", [""] + config.SHIFTS)
+            selected_course = st.selectbox("Curso", course_options)
             
-            with col2:
-                # Get available courses
-                courses_df = utils.get_all_courses()
-                course_options = [""] + [f"{course['id']} - {course['nombre']}" for _, course in courses_df.iterrows()] if not courses_df.empty else [""]
-                
-                selected_course = st.selectbox("Curso", course_options)
-                
-                # Extract course ID from selection
-                curso_id = None
-                if selected_course and selected_course != "":
-                    curso_id = int(selected_course.split(" - ")[0])
-                
-                # Get user NIP as default monitor
-                user_nip = None
+            # Extract course ID from selection
+            curso_id = None
+            if selected_course and selected_course != "":
+                curso_id = int(selected_course.split(" - ")[0])
+            
+            # Get user NIP as default monitor
+            user_nip = None
+            try:
+                user_response = config.supabase.table(config.USERS_TABLE).select("agent_nip").eq("username", st.session_state.username).execute()
+                if user_response.data:
+                    user_nip = user_response.data[0]['agent_nip']
+            except:
+                pass
+            
+            # Get monitors for selection
+            monitors_df = utils.get_all_monitors()
+            monitor_options = [""] + [f"{monitor['nip']} - {monitor['nombre']} {monitor['apellido1']}" for _, monitor in monitors_df.iterrows()] if not monitors_df.empty else [""]
+            
+            # Find index of user_nip in monitor_options
+            default_index = 0
+            if user_nip:
+                for i, option in enumerate(monitor_options):
+                    if option and option.startswith(f"{user_nip} -"):
+                        default_index = i
+                        break
+            
+            selected_monitor = st.selectbox("Monitor", monitor_options, index=default_index)
+            
+            # Extract monitor NIP from selection
+            monitor_nip = None
+            if selected_monitor and selected_monitor != "":
+                monitor_nip = selected_monitor.split(" - ")[0]
+            
+        # Submit button
+        submitted = st.form_submit_button("Añadir Actividad")
+        
+        if submitted:
+            # Validate form data
+            validation_errors = utils.validate_activity(fecha, turno)
+            
+            if validation_errors:
+                for error in validation_errors:
+                    st.error(error)
+            else:
+                # Check if activity already exists on the same date and shift
                 try:
-                    user_response = config.supabase.table(config.USERS_TABLE).select("agent_nip").eq("username", st.session_state.username).execute()
-                    if user_response.data:
-                        user_nip = user_response.data[0]['agent_nip']
-                except:
-                    pass
-                
-                # Get monitors for selection
-                monitors_df = utils.get_all_monitors()
-                monitor_options = [""] + [f"{monitor['nip']} - {monitor['nombre']} {monitor['apellido1']}" for _, monitor in monitors_df.iterrows()] if not monitors_df.empty else [""]
-                
-                # Find index of user_nip in monitor_options
-                default_index = 0
-                if user_nip:
-                    for i, option in enumerate(monitor_options):
-                        if option and option.startswith(f"{user_nip} -"):
-                            default_index = i
-                            break
-                
-                selected_monitor = st.selectbox("Monitor", monitor_options, index=default_index)
-                
-                # Extract monitor NIP from selection
-                monitor_nip = None
-                if selected_monitor and selected_monitor != "":
-                    monitor_nip = selected_monitor.split(" - ")[0]
-            
-            # Submit button
-            submitted = st.form_submit_button("Añadir Actividad")
-            
-            if submitted:
-                # Validate form data
-                validation_errors = utils.validate_activity(fecha, turno)
-                
-                if validation_errors:
-                    for error in validation_errors:
-                        st.error(error)
-                else:
-                    # Check if activity already exists on the same date and shift
-                    try:
-                        existing_activity = config.supabase.table(config.ACTIVITIES_TABLE).select("*").eq("fecha", fecha.strftime("%Y-%m-%d")).eq("turno", turno).execute()
+                    existing_activity = config.supabase.table(config.ACTIVITIES_TABLE).select("*").eq("fecha", fecha.strftime("%Y-%m-%d")).eq("turno", turno).execute()
+                    
+                    if existing_activity.data:
+                        st.error(f"Ya existe una actividad programada para esa fecha y turno")
+                    else:
+                        # Prepare data
+                        activity_data = {
+                            'fecha': fecha.strftime("%Y-%m-%d"),
+                            'turno': turno,
+                            'curso_id': curso_id,
+                            'monitor_nip': monitor_nip
+                        }
                         
-                        if existing_activity.data:
-                            st.error(f"Ya existe una actividad programada para esa fecha y turno")
+                        # Insert data
+                        result = config.supabase.table(config.ACTIVITIES_TABLE).insert(activity_data).execute()
+                        
+                        if result.data:
+                            st.success(f"Actividad añadida correctamente para el {fecha.strftime('%d/%m/%Y')} en turno {turno}")
+                            # Actualizar DataFrame en session_state
+                            st.session_state.activities_df = utils.get_all_activities()
+                            st.rerun()
                         else:
-                            # Prepare data
-                            activity_data = {
-                                'fecha': fecha.strftime("%Y-%m-%d"),
-                                'turno': turno,
-                                'curso_id': curso_id,
-                                'monitor_nip': monitor_nip
-                            }
-                            
-                            # Insert data
-                            result = config.supabase.table(config.ACTIVITIES_TABLE).insert(activity_data).execute()
-                            
-                            if result.data:
-                                st.success(f"Actividad añadida correctamente para el {fecha.strftime('%d/%m/%Y')} en turno {turno}")
-                                # Actualizar DataFrame en session_state
-                                st.session_state.activities_df = utils.get_all_activities()
-                                st.rerun()
-                            else:
-                                st.error("Error al añadir la actividad")
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
+                            st.error("Error al añadir la actividad")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
 
 # Tab 3: Assign Agents
 with tab3:
