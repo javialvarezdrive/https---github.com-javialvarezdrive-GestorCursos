@@ -95,33 +95,50 @@ def main():
                     
                     if (!authToken) {
                         authToken = localStorage.getItem('vigo_police_session');
+                        console.log('Token no encontrado en cookies, buscando en localStorage (vigo_police_session)');
                     }
                     
                     if (!authToken) {
                         authToken = localStorage.getItem('auth_token');
+                        console.log('Token no encontrado en vigo_police_session, buscando en localStorage (auth_token)');
                     }
                     
                     if (authToken) {
                         console.log('Token de sesión encontrado, auto-login iniciado');
                         
-                        // Crear campo oculto con el token
-                        const tokenInput = document.getElementById('token-input');
-                        if (tokenInput) {
-                            tokenInput.value = authToken;
-                            
-                            // Crear un botón para activar streamlit
-                            const loginButton = document.createElement('button');
-                            loginButton.id = 'auto-login-button';
-                            loginButton.style.display = 'none';
-                            loginButton.textContent = 'Auto Login';
-                            document.body.appendChild(loginButton);
-                            
-                            // Simular clic para que Streamlit tome el valor
-                            setTimeout(() => {
-                                console.log('Ejecutando auto-login');
-                                loginButton.click();
-                            }, 500);
+                        // Crear o usar campo oculto para el token
+                        let tokenInput = document.getElementById('token-input');
+                        if (!tokenInput) {
+                            // Si no existe, crearlo
+                            tokenInput = document.createElement('input');
+                            tokenInput.type = 'hidden';
+                            tokenInput.id = 'token-input';
+                            document.body.appendChild(tokenInput);
+                            console.log('Creado nuevo campo para token');
                         }
+                        
+                        // Establecer el valor con el token
+                        tokenInput.value = authToken;
+                        console.log('Campo token-input actualizado con valor');
+                        
+                        // Crear un botón para activar streamlit
+                        const loginButton = document.createElement('button');
+                        loginButton.id = 'auto-login-button';
+                        loginButton.style.display = 'none';
+                        loginButton.textContent = 'Auto Login';
+                        document.body.appendChild(loginButton);
+                        
+                        // Simular eventos para que Streamlit tome el valor
+                        setTimeout(() => {
+                            console.log('Ejecutando auto-login');
+                            
+                            // Simular cambio en el campo
+                            const changeEvent = new Event('change', { bubbles: true });
+                            tokenInput.dispatchEvent(changeEvent);
+                            
+                            // Simular clic en el botón
+                            loginButton.click();
+                        }, 800);
                     } else {
                         console.log('No hay datos de sesión guardados');
                     }

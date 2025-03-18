@@ -195,45 +195,70 @@ def load_session_from_cookie():
             
             // Si no está en cookies, buscar en localStorage
             if (!authToken) {
-                authToken = localStorage.getItem('auth_token');
-                console.log('Token no encontrado en cookies, usando localStorage');
+                authToken = localStorage.getItem('vigo_police_session');
+                console.log('Token no encontrado en cookies, usando localStorage (vigo_police_session)');
             }
             
-            // Si existe un token en cualquiera de los dos lugares
+            // Si aún no lo encontramos, buscar en el otro nombre de localStorage
+            if (!authToken) {
+                authToken = localStorage.getItem('auth_token');
+                console.log('Token no encontrado, usando localStorage (auth_token)');
+            }
+            
+            // Si existe un token en cualquiera de los lugares
             if (authToken) {
-                // Crear un campo para recibir el token
-                const hiddenInput = document.createElement('div');
-                hiddenInput.id = 'streamlit-auth-token';
-                hiddenInput.style.display = 'none';
-                hiddenInput.innerText = authToken;
-                document.body.appendChild(hiddenInput);
+                console.log('Token de sesión encontrado: ' + authToken.substring(0, 10) + '...');
                 
-                console.log('Token de sesión encontrado');
+                // Obtener/crear el campo oculto para el token
+                let inputField = document.getElementById('token-input');
                 
-                // Intentar actualizar un campo si existe (para formularios)
-                setTimeout(() => {
-                    const inputField = document.querySelector('#token-input');
-                    if (inputField) {
-                        inputField.value = authToken;
-                        console.log('Campo de entrada actualizado con token');
-                        
-                        // Simular un evento de cambio para que Streamlit lo detecte
+                // Si no existe, crearlo
+                if (!inputField) {
+                    inputField = document.createElement('input');
+                    inputField.type = 'hidden';
+                    inputField.id = 'token-input';
+                    document.body.appendChild(inputField);
+                    console.log('Creado nuevo campo para el token');
+                }
+                
+                // Establecer el valor
+                inputField.value = authToken;
+                
+                // Crear un elemento para activar Streamlit
+                const eventTrigger = document.createElement('button');
+                eventTrigger.id = 'auth-token-submit';
+                eventTrigger.innerText = 'Submit Token';
+                eventTrigger.style.display = 'none';
+                document.body.appendChild(eventTrigger);
+                
+                // Configurar un listener para cuando el DOM esté completamente cargado
+                document.addEventListener('DOMContentLoaded', function() {
+                    console.log('DOM cargado, activando token');
+                    // Asegurarnos que Streamlit está listo antes de disparar
+                    setTimeout(() => {
+                        // Simular un evento de cambio en el campo
                         const event = new Event('change', { bubbles: true });
                         inputField.dispatchEvent(event);
-                    }
-                    
-                    // Crear un botón oculto que active streamlit
-                    const refreshButton = document.createElement('button');
-                    refreshButton.id = 'refresh-session';
-                    refreshButton.style.display = 'none';
-                    refreshButton.addEventListener('click', function() {
-                        // Este evento será capturado por Streamlit
-                        console.log('Intentando reactivar sesión');
-                    });
-                    document.body.appendChild(refreshButton);
-                    refreshButton.click();
-                    
-                }, 500);
+                        
+                        // Hacer clic en el botón para activar
+                        eventTrigger.click();
+                        console.log('Eventos disparados para token');
+                    }, 1000);
+                });
+                
+                // Si el DOM ya está cargado, activar ahora
+                if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                    console.log('DOM ya cargado, activando token inmediatamente');
+                    setTimeout(() => {
+                        // Simular un evento de cambio en el campo
+                        const event = new Event('change', { bubbles: true });
+                        inputField.dispatchEvent(event);
+                        
+                        // Hacer clic en el botón para activar
+                        eventTrigger.click();
+                        console.log('Eventos disparados para token inmediatamente');
+                    }, 500);
+                }
             } else {
                 console.log('No hay token de sesión guardado');
             }
@@ -243,9 +268,37 @@ def load_session_from_cookie():
     })();
     </script>
     <div id="token-container"></div>
-    <input type="hidden" id="token-input" />
+    <input type="hidden" id="token-input" name="token-input" />
     """
     st.markdown(js_code, unsafe_allow_html=True)
+    
+    # Agregar componente para capturar el valor del token
+    components = """
+    <script>
+    // Función para enviar token a Streamlit
+    const sendTokenToStreamlit = () => {
+        const tokenInput = document.getElementById('token-input');
+        if (tokenInput && tokenInput.value) {
+            // Esto permitirá a Streamlit obtener el valor
+            window.parent.postMessage({
+                type: "streamlit:setComponentValue",
+                value: tokenInput.value
+            }, "*");
+            console.log('Token enviado a Streamlit');
+        }
+    };
+    
+    // Ejecutar cuando el DOM esté listo
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(sendTokenToStreamlit, 1000);
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(sendTokenToStreamlit, 1000);
+        });
+    }
+    </script>
+    """
+    st.components.v1.html(components, height=0)
     
     # Este método se mejorará en otras partes del código
     # para detectar el token y autenticar automáticamente
