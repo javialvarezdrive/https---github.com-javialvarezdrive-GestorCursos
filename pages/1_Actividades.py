@@ -21,13 +21,6 @@ if "activity_to_delete_id" not in st.session_state:
 # Inicializar datos en el estado de la sesión
 if "activities_df" not in st.session_state:
     st.session_state.activities_df = utils.get_all_activities()
-    
-# Inicializar variables para la generación de PDF
-if "pdf_generated" not in st.session_state:
-    st.session_state.pdf_generated = False
-    
-if "pdf_link" not in st.session_state:
-    st.session_state.pdf_link = None
 
 # Page title
 st.title("🗓️ Gestión de Actividades")
@@ -216,55 +209,24 @@ with tab_lista:
                         # Obtener el ID de la actividad seleccionada para generar PDF
                         activity_id = display_df.iloc[selected_idx]['id']
                         
-                        # Sección destacada para descargar el PDF
-                        st.markdown("---")
-                        st.subheader("📄 Generar Informe PDF")
-                        st.info("Desde aquí puede generar e imprimir un informe completo de la actividad para guardar en el registro oficial.")
+                        # Generar PDF
+                        pdf_bytes = pdf_generator.generate_activity_report(activity_id)
                         
-                        col_pdf1, col_pdf2 = st.columns([1, 2])
-                        with col_pdf1:
-                            if st.button("🖨️ Generar PDF para imprimir", type="primary"):
-                                with st.spinner("Generando informe PDF..."):
-                                    # Generar PDF
-                                    pdf_bytes = pdf_generator.generate_activity_report(activity_id)
-                                    
-                                    if pdf_bytes:
-                                        # Crear un enlace de descarga para el PDF
-                                        fecha = display_df.iloc[selected_idx]['Fecha']
-                                        curso = display_df.iloc[selected_idx]['Curso']
-                                        filename = f"actividad_{fecha}_{curso}.pdf".replace(" ", "_").replace("/", "-")
-                                        
-                                        pdf_link = pdf_generator.get_pdf_download_link(
-                                            pdf_bytes, 
-                                            filename=filename,
-                                            text="📄 Descargar Informe PDF"
-                                        )
-                                        
-                                        st.session_state.pdf_link = pdf_link
-                                        st.session_state.pdf_generated = True
-                                        st.rerun()
-                                    else:
-                                        st.error("No se pudo generar el PDF. Contacta al administrador.")
-                        
-                        with col_pdf2:
-                            # Mostrar instrucciones de uso
-                            st.markdown("""
-                            **Instrucciones:**
-                            1. Haga clic en 'Generar PDF para imprimir'
-                            2. Cuando aparezca el botón de descarga, haga clic en él
-                            3. Abra el archivo descargado con su lector de PDF
-                            4. Imprima el documento desde su lector de PDF
-                            """)
-                        
-                        # Mostrar el enlace de descarga si se ha generado
-                        if 'pdf_generated' in st.session_state and st.session_state.pdf_generated:
-                            st.markdown("---")
-                            st.success("¡PDF generado correctamente! Haga clic en el botón para descargar.")
-                            st.markdown(st.session_state.pdf_link, unsafe_allow_html=True)
-                            # Agregar botón para reiniciar
-                            if st.button("Generar otro informe"):
-                                st.session_state.pdf_generated = False
-                                st.rerun()
+                        if pdf_bytes:
+                            # Crear un enlace de descarga para el PDF
+                            fecha = display_df.iloc[selected_idx]['Fecha']
+                            curso = display_df.iloc[selected_idx]['Curso']
+                            filename = f"actividad_{fecha}_{curso}.pdf".replace(" ", "_").replace("/", "-")
+                            
+                            pdf_link = pdf_generator.get_pdf_download_link(
+                                pdf_bytes, 
+                                filename=filename,
+                                text="📄 Descargar Informe PDF"
+                            )
+                            
+                            st.markdown(pdf_link, unsafe_allow_html=True)
+                        else:
+                            st.error("No se pudo generar el PDF. Contacta al administrador.")
                     else:
                         st.info("Esta actividad no tiene participantes asignados.")
             
