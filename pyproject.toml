@@ -11,4 +11,5 @@ dependencies = [
     "streamlit>=1.43.2",
     "supabase>=2.13.0",
     "cryptography>=44.0.2",
+    "streamlit-calendar>=1.2.1",
 ]

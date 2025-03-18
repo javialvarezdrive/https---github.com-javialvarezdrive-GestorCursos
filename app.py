@@ -76,7 +76,6 @@ def main():
             def process_login():
                 email = st.session_state.email_input
                 password = st.session_state.password_input
-                remember = st.session_state.get("remember_me", False)
 
                 # Almacenar valores en session_state para persistencia
                 st.session_state.form_email = email
@@ -149,9 +148,7 @@ def main():
                     # Limpiar error de login
                     st.session_state.login_error = ""
 
-                    # Si se seleccionó "Recordar sesión", guardar las credenciales
-                    if remember:
-                        utils.save_credentials(email, password, remember)
+
 
                     # Configuramos una bandera para recargar después del callback
                     st.session_state.need_rerun = True
@@ -179,13 +176,7 @@ def main():
                               key="password_input",
                               value=st.session_state.form_password)
 
-                st.checkbox(
-                    "Recordar sesión",
-                    key="remember_me",
-                    value=st.session_state.get("remember_me", False),
-                    help=
-                    "Guarda tus credenciales para iniciar sesión automáticamente en este dispositivo"
-                )
+
 
                 submit_button = st.form_submit_button("Acceder",
                                                       on_click=process_login)

@@ -191,7 +191,6 @@ with tab1:
                     'Fecha': [fecha_formatted],
                     'Turno': [activity['turno']],
                     'Curso': [curso_nombre],
-                    'Sección': [seccion],
                     'Monitor': [monitor_name],
                     'Participantes': [participants_str]
                 })], ignore_index=True)
