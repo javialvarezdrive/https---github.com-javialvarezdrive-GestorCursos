@@ -56,7 +56,8 @@ def setup_authentication():
         )
         
         # Display login form
-        name, authentication_status, username = authenticator.login("main")
+        fields = {"Form name": "Iniciar Sesión", "Username": "Usuario", "Password": "Contraseña", "Login": "Acceder"}
+        name, authentication_status, username = authenticator.login("main", fields=fields)
         
         # Handle authentication status
         if authentication_status is False:
