@@ -15,6 +15,40 @@ utils.setup_sidebar()
 # Page title
 st.title("📊 Estadísticas")
 
+# Inicializar variables de estado para las vistas personalizadas
+if 'view_mode' not in st.session_state:
+    st.session_state.view_mode = "dashboard"  # Opciones: "dashboard", "custom"
+    
+if 'selected_view' not in st.session_state:
+    st.session_state.selected_view = "participacion_seccion"
+    
+if 'saved_views' not in st.session_state:
+    # Inicializar con algunas vistas predefinidas
+    st.session_state.saved_views = {
+        "participacion_seccion": {
+            "name": "Participación por Sección",
+            "description": "Muestra la distribución de participación por sección",
+            "view_type": "bar",
+            "x_axis": "seccion",
+            "y_axis": "count"
+        },
+        "participacion_grupo": {
+            "name": "Participación por Grupo",
+            "description": "Muestra la distribución de participación por grupo",
+            "view_type": "bar",
+            "x_axis": "grupo",
+            "y_axis": "count"
+        },
+        "agentes_activos": {
+            "name": "Top Agentes Activos",
+            "description": "Muestra los agentes con más participación",
+            "view_type": "bar",
+            "x_axis": "agente",
+            "y_axis": "count",
+            "limit": 10
+        }
+    }
+
 # Main function
 def show_statistics():
     # Sidebar filters
@@ -34,6 +68,18 @@ def show_statistics():
     # Date inputs
     start_date = st.sidebar.date_input("Fecha inicio", default_start_date)
     end_date = st.sidebar.date_input("Fecha fin", default_end_date)
+    
+    # Toggle para vistas dinámicas
+    st.sidebar.subheader("Tipo de visualización")
+    view_mode = st.sidebar.radio(
+        "Modo de visualización",
+        ["Dashboard estándar", "Vista personalizada"],
+        index=0 if st.session_state.view_mode == "dashboard" else 1,
+        key="view_mode_radio"
+    )
+    
+    # Actualizar modo de visualización
+    st.session_state.view_mode = "dashboard" if view_mode == "Dashboard estándar" else "custom"
     
     # Section filter
     try:
@@ -71,6 +117,71 @@ def show_statistics():
     except:
         selected_groups = []
         st.sidebar.warning("No se pudieron cargar los grupos")
+        
+    # Si estamos en modo Vista personalizada, mostrar selector de vistas
+    if st.session_state.view_mode == "custom":
+        st.sidebar.subheader("Vistas personalizadas")
+        
+        # Opciones de vistas guardadas
+        view_options = list(st.session_state.saved_views.keys())
+        view_names = [st.session_state.saved_views[key]["name"] for key in view_options]
+        
+        # Selector de vista
+        selected_view_name = st.sidebar.selectbox(
+            "Seleccionar vista",
+            view_names,
+            index=view_options.index(st.session_state.selected_view) if st.session_state.selected_view in view_options else 0
+        )
+        
+        # Actualizar la vista seleccionada
+        for key, view in st.session_state.saved_views.items():
+            if view["name"] == selected_view_name:
+                st.session_state.selected_view = key
+                break
+        
+        # Sección para crear nueva vista personalizada
+        with st.sidebar.expander("Crear nueva vista", expanded=False):
+            new_view_name = st.text_input("Nombre de la vista", key="new_view_name")
+            new_view_desc = st.text_area("Descripción", key="new_view_desc")
+            new_view_type = st.selectbox("Tipo de gráfico", ["bar", "line", "pie", "scatter"], key="new_view_type")
+            
+            # Opciones para los ejes
+            axis_options = {
+                "seccion": "Sección",
+                "grupo": "Grupo",
+                "agente": "Agente",
+                "fecha": "Fecha",
+                "curso": "Curso",
+                "count": "Cantidad"
+            }
+            
+            new_x_axis = st.selectbox("Eje X", list(axis_options.keys()), format_func=lambda x: axis_options[x], key="new_x_axis")
+            new_y_axis = st.selectbox("Eje Y", list(axis_options.keys()), index=list(axis_options.keys()).index("count"), format_func=lambda x: axis_options[x], key="new_y_axis")
+            
+            # Límite de datos (opcional)
+            new_limit = st.number_input("Límite de datos (0 = sin límite)", min_value=0, value=0, key="new_limit")
+            
+            if st.button("Guardar vista"):
+                if new_view_name:
+                    # Generar un ID único para la vista
+                    new_view_id = f"custom_view_{len(st.session_state.saved_views) + 1}"
+                    
+                    # Guardar la nueva vista
+                    st.session_state.saved_views[new_view_id] = {
+                        "name": new_view_name,
+                        "description": new_view_desc,
+                        "view_type": new_view_type,
+                        "x_axis": new_x_axis,
+                        "y_axis": new_y_axis,
+                        "limit": new_limit if new_limit > 0 else None
+                    }
+                    
+                    # Seleccionar automáticamente la nueva vista
+                    st.session_state.selected_view = new_view_id
+                    st.success(f"Vista '{new_view_name}' creada con éxito!")
+                    st.rerun()
+                else:
+                    st.error("Por favor, proporciona un nombre para la vista.")
     
     # Apply filters and load data
     try:
@@ -305,33 +416,30 @@ def show_statistics():
                 else:
                     st.info("No hay datos de participación por curso")
             
-            # 7. Data table for detailed view
-            st.subheader("Datos Detallados")
-            
-            show_data = st.checkbox("Mostrar datos completos", False)
-            
-            if show_data:
-                # Create a detailed dataframe
-                detailed_data = []
+            # Mostrar vistas dinámicas si estamos en modo personalizado
+            if st.session_state.view_mode == "custom":
+                # Crear un DataFrame unificado con todos los datos para las vistas personalizadas
+                unified_data = []
                 
+                # Preparar dataset para visualización
                 for _, activity in activities_df.iterrows():
                     activity_id = activity['id']
-                    activity_date = utils.format_date(activity['fecha'])
+                    activity_date = activity['fecha']
                     activity_shift = activity['turno']
                     
-                    # Get course name
+                    # Obtener nombre del curso
                     course_name = "Sin curso"
                     if activity['curso_id'] and not courses_df.empty:
                         course_data = courses_df[courses_df['id'] == activity['curso_id']]
                         if not course_data.empty:
                             course_name = course_data.iloc[0]['nombre']
                     
-                    # Get monitor name
+                    # Obtener nombre del monitor
                     monitor_name = "Sin monitor"
                     if activity['monitor_nip']:
                         monitor_name = utils.get_agent_name(activity['monitor_nip'])
                     
-                    # Get participants for this activity
+                    # Obtener participantes para esta actividad
                     activity_participants = filtered_participants_df[filtered_participants_df['activity_id'] == activity_id]
                     
                     if not activity_participants.empty:
@@ -339,34 +447,196 @@ def show_statistics():
                             agent_nip = participant['agent_nip']
                             agent_name = utils.get_agent_name(agent_nip)
                             
-                            # Get agent section and group
+                            # Obtener sección y grupo del agente
                             agent_data = agents_df[agents_df['nip'] == agent_nip]
-                            section = agent_data.iloc[0]['seccion'] if not agent_data.empty else ""
-                            group = agent_data.iloc[0]['grupo'] if not agent_data.empty else ""
+                            section = agent_data.iloc[0]['seccion'] if not agent_data.empty else "Sin sección"
+                            group = agent_data.iloc[0]['grupo'] if not agent_data.empty else "Sin grupo"
                             
-                            detailed_data.append({
-                                'Fecha': activity_date,
-                                'Turno': activity_shift,
-                                'Curso': course_name,
-                                'Monitor': monitor_name,
-                                'NIP': agent_nip,
-                                'Agente': agent_name,
-                                'Sección': section,
-                                'Grupo': group
+                            unified_data.append({
+                                'fecha': activity_date,
+                                'turno': activity_shift,
+                                'curso': course_name,
+                                'monitor': monitor_name,
+                                'nip': agent_nip,
+                                'agente': agent_name,
+                                'seccion': section,
+                                'grupo': group
                             })
                 
-                detailed_df = pd.DataFrame(detailed_data)
+                unified_df = pd.DataFrame(unified_data)
                 
-                if not detailed_df.empty:
-                    st.dataframe(detailed_df, use_container_width=True)
+                if not unified_df.empty:
+                    # Mostrar la vista personalizada seleccionada
+                    view_config = st.session_state.saved_views[st.session_state.selected_view]
+                    
+                    st.subheader(view_config["name"])
+                    if view_config["description"]:
+                        st.caption(view_config["description"])
+                    
+                    # Extraer configuración
+                    x_axis = view_config["x_axis"]
+                    y_axis = view_config["y_axis"]
+                    view_type = view_config["view_type"]
+                    limit = view_config.get("limit", None)
+                    
+                    # Preparar datos según configuración
+                    if x_axis == "fecha":
+                        unified_df['fecha'] = pd.to_datetime(unified_df['fecha'])
+                    
+                    # Preparar datos para la vista
+                    if y_axis == "count":
+                        # Si el eje Y es "count", agrupar por el eje X y contar
+                        if x_axis in unified_df.columns:
+                            plot_data = unified_df[x_axis].value_counts().reset_index()
+                            plot_data.columns = [x_axis, 'count']
+                            
+                            # Ordenar de mayor a menor
+                            plot_data = plot_data.sort_values('count', ascending=False)
+                            
+                            # Aplicar límite si existe
+                            if limit and limit > 0:
+                                plot_data = plot_data.head(limit)
+                                
+                            # Renombrar columnas para visualización
+                            name_mapping = {
+                                'seccion': 'Sección',
+                                'grupo': 'Grupo',
+                                'agente': 'Agente',
+                                'fecha': 'Fecha',
+                                'curso': 'Curso',
+                                'count': 'Cantidad'
+                            }
+                            
+                            # Crear el gráfico según el tipo seleccionado
+                            if view_type == "bar":
+                                fig = px.bar(
+                                    plot_data, 
+                                    x=x_axis, 
+                                    y='count',
+                                    labels={
+                                        x_axis: name_mapping.get(x_axis, x_axis.capitalize()),
+                                        'count': 'Cantidad'
+                                    },
+                                    color='count',
+                                    color_continuous_scale='Viridis'
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                            elif view_type == "pie":
+                                fig = px.pie(
+                                    plot_data, 
+                                    names=x_axis, 
+                                    values='count',
+                                    title=f'Distribución por {name_mapping.get(x_axis, x_axis.capitalize())}'
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                            elif view_type == "line" and x_axis == "fecha":
+                                # Para gráficos de línea con fechas, asegurarse de ordenar por fecha
+                                plot_data = plot_data.sort_values('fecha')
+                                fig = px.line(
+                                    plot_data, 
+                                    x='fecha', 
+                                    y='count',
+                                    markers=True,
+                                    labels={
+                                        'fecha': 'Fecha',
+                                        'count': 'Cantidad'
+                                    }
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                                
+                            elif view_type == "scatter":
+                                fig = px.scatter(
+                                    plot_data, 
+                                    x=x_axis, 
+                                    y='count',
+                                    size='count',
+                                    color='count',
+                                    labels={
+                                        x_axis: name_mapping.get(x_axis, x_axis.capitalize()),
+                                        'count': 'Cantidad'
+                                    }
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Mostrar datos en formato tabla
+                            with st.expander("Ver datos", expanded=False):
+                                # Renombrar columnas para visualización
+                                display_df = plot_data.copy()
+                                display_df.columns = [name_mapping.get(col, col.capitalize()) for col in display_df.columns]
+                                st.dataframe(display_df, use_container_width=True)
+                        else:
+                            st.warning(f"No se encontró la columna '{x_axis}' en los datos")
+                    else:
+                        st.warning("La configuración actual de ejes no es compatible. Solo se soporta 'count' para el eje Y en esta versión.")
                 else:
-                    st.info("No hay datos detallados disponibles")
+                    st.warning("No hay datos disponibles para la visualización personalizada")
+            
+            # 7. Data table for detailed view
+            if st.session_state.view_mode == "dashboard":
+                st.subheader("Datos Detallados")
+                
+                show_data = st.checkbox("Mostrar datos completos", False)
+                
+                if show_data:
+                    # Create a detailed dataframe
+                    detailed_data = []
+                    
+                    for _, activity in activities_df.iterrows():
+                        activity_id = activity['id']
+                        activity_date = utils.format_date(activity['fecha'])
+                        activity_shift = activity['turno']
+                        
+                        # Get course name
+                        course_name = "Sin curso"
+                        if activity['curso_id'] and not courses_df.empty:
+                            course_data = courses_df[courses_df['id'] == activity['curso_id']]
+                            if not course_data.empty:
+                                course_name = course_data.iloc[0]['nombre']
+                        
+                        # Get monitor name
+                        monitor_name = "Sin monitor"
+                        if activity['monitor_nip']:
+                            monitor_name = utils.get_agent_name(activity['monitor_nip'])
+                        
+                        # Get participants for this activity
+                        activity_participants = filtered_participants_df[filtered_participants_df['activity_id'] == activity_id]
+                        
+                        if not activity_participants.empty:
+                            for _, participant in activity_participants.iterrows():
+                                agent_nip = participant['agent_nip']
+                                agent_name = utils.get_agent_name(agent_nip)
+                                
+                                # Get agent section and group
+                                agent_data = agents_df[agents_df['nip'] == agent_nip]
+                                section = agent_data.iloc[0]['seccion'] if not agent_data.empty else ""
+                                group = agent_data.iloc[0]['grupo'] if not agent_data.empty else ""
+                                
+                                detailed_data.append({
+                                    'Fecha': activity_date,
+                                    'Turno': activity_shift,
+                                    'Curso': course_name,
+                                    'Monitor': monitor_name,
+                                    'NIP': agent_nip,
+                                    'Agente': agent_name,
+                                    'Sección': section,
+                                    'Grupo': group
+                                })
+                    
+                    detailed_df = pd.DataFrame(detailed_data)
+                    
+                    if not detailed_df.empty:
+                        st.dataframe(detailed_df, use_container_width=True)
+                    else:
+                        st.info("No hay datos detallados disponibles")
             
         else:
             st.warning("No hay datos de participación que cumplan con los filtros seleccionados")
     
     except Exception as e:
         st.error(f"Error al cargar los datos: {str(e)}")
+        st.exception(e)  # Mostrar detalles de la excepción para depuración
 
 # Run the main function
 show_statistics()
