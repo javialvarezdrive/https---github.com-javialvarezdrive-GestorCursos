@@ -868,9 +868,7 @@ def validate_course(nombre, descripcion):
     if not nombre:
         errors.append("El nombre del curso es obligatorio")
     
-    # Description validation
-    if not descripcion:
-        errors.append("La descripción es obligatoria")
+    # Descripción ya no es obligatoria
     
     return errors
 
