@@ -854,8 +854,13 @@ def get_all_courses(include_hidden=False):
         st.error(f"Error al obtener los cursos: {str(e)}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=300)  # Cache de 5 minutos
 def get_all_activities():
-    """Get all activities from database"""
+    """
+    Get all activities from database
+    
+    Esta función está cacheada durante 5 minutos para reducir consultas a la base de datos
+    """
     try:
         response = config.supabase.table(config.ACTIVITIES_TABLE).select("*").execute()
         
@@ -866,8 +871,13 @@ def get_all_activities():
         st.error(f"Error al obtener las actividades: {str(e)}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=300)  # Cache de 5 minutos
 def get_activity_participants(activity_id):
-    """Get participants for a specific activity"""
+    """
+    Get participants for a specific activity
+    
+    Esta función está cacheada durante 5 minutos para reducir consultas a la base de datos
+    """
     try:
         response = config.supabase.table(config.PARTICIPANTS_TABLE).select("*").eq("activity_id", activity_id).execute()
         
@@ -878,8 +888,13 @@ def get_activity_participants(activity_id):
         st.error(f"Error al obtener los participantes: {str(e)}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=600)  # Cache de 10 minutos
 def get_agent_name(nip):
-    """Get agent's full name by NIP"""
+    """
+    Get agent's full name by NIP
+    
+    Esta función está cacheada durante 10 minutos para reducir consultas a la base de datos
+    """
     try:
         response = config.supabase.table(config.AGENTS_TABLE).select("nombre", "apellido1", "apellido2").eq("nip", nip).execute()
         
@@ -895,8 +910,13 @@ def get_agent_name(nip):
         st.error(f"Error al obtener el nombre del agente: {str(e)}")
         return "Error"
         
+@st.cache_data(ttl=600)  # Cache de 10 minutos
 def get_course_name(course_id):
-    """Get course name by ID"""
+    """
+    Get course name by ID
+    
+    Esta función está cacheada durante 10 minutos para reducir consultas a la base de datos
+    """
     if course_id is None:
         return "Sin curso asignado"
     
@@ -1076,9 +1096,13 @@ def reset_password(nip, email):
         return False, "Error en el proceso de recuperación de contraseña"
         
 # --- Función para obtener estadísticas dinámicas ---
+@st.cache_data(ttl=300)  # Cache de 5 minutos
 def get_agents_activity_stats(start_date=None, end_date=None, curso_id=None, secciones=None, agentes=None):
     """
     Obtiene estadísticas de actividad de agentes con filtros dinámicos
+    
+    Esta función está cacheada durante 5 minutos para mejorar el rendimiento
+    en la generación de estadísticas, que puede ser computacionalmente intensiva.
     
     Parámetros:
     - start_date: Fecha de inicio (datetime.date)
