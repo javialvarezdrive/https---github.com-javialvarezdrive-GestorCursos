@@ -180,20 +180,11 @@ def main():
                 st.rerun()
     
     else:
-        # Add theme toggle in sidebar
+        # Sidebar para navegación
         with st.sidebar:
-            if st.toggle("Modo Oscuro", key='dark_mode'):
-                st.markdown("""
-                    <style>
-                        [data-testid="stSidebar"] {
-                            background-color: #262730;
-                        }
-                    </style>
-                """, unsafe_allow_html=True)
-                st.theme(**config.DARK_THEME)
-            else:
-                st.theme(**config.LIGHT_THEME)
-                
+            # Modo claro configurado en .streamlit/config.toml
+            st.markdown("### Navegación")
+            
         # Show the main page after authentication
         # Usamos el nombre del agente para la bienvenida si está disponible
         if 'agent_name' in st.session_state:
