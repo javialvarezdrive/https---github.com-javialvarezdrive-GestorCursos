@@ -1,0 +1,10 @@
+streamlit>=1.30.0
+pandas>=2.0.0
+supabase>=2.0.0
+pyyaml>=6.0
+plotly>=5.18.0
+fpdf>=1.7.2
+reportlab>=4.0.0
+streamlit-authenticator>=0.2.3
+streamlit-calendar>=1.1.0
+cryptography>=41.0.0
