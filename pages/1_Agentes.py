@@ -244,18 +244,10 @@ with tab3:
                     # Delete agent confirmation
                     st.warning(f"¿Estás seguro de que deseas eliminar al agente {nombre} {apellido1}?")
                     
-                    # Create confirmation buttons outside the form
+                    # Create confirmation buttons
                     col1, col2 = st.columns(2)
-                    
-                    # Create a form for confirmation buttons
-                    with st.form(key=f"confirm_delete_form_{nip}"):
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            confirm_delete = st.form_submit_button("Sí, eliminar")
-                        with c2:
-                            cancel_delete = st.form_submit_button("No, cancelar")
-                            
-                        if confirm_delete:
+                    with col1:
+                        if st.button("Sí, eliminar", key=f"confirm_yes_{nip}"):
                             try:
                                 # Delete agent
                                 result = config.supabase.table(config.AGENTS_TABLE).delete().eq("nip", nip).execute()
@@ -269,8 +261,9 @@ with tab3:
                                     st.error("Error al eliminar el agente")
                             except Exception as e:
                                 st.error(f"Error: {str(e)}")
-                                
-                        if cancel_delete:
+                    
+                    with col2:
+                        if st.button("No, cancelar", key=f"confirm_no_{nip}"):
                             st.session_state[confirm_delete_key] = False
                     
                     # Check if rerun is needed
