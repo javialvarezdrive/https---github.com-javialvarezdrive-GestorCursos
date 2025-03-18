@@ -879,14 +879,53 @@ def get_activity_participants(activity_id):
     Esta función está cacheada durante 5 minutos para reducir consultas a la base de datos
     """
     try:
-        response = config.supabase.table(config.PARTICIPANTS_TABLE).select("*").eq("activity_id", activity_id).execute()
+        # Primero obtenemos los IDs de los participantes
+        response = config.supabase.table(config.PARTICIPANTS_TABLE).select("agent_nip").eq("activity_id", activity_id).execute()
         
-        if response.data:
-            return pd.DataFrame(response.data)
-        return pd.DataFrame()
+        if not response.data:
+            return []
+            
+        # Obtenemos los detalles de cada agente participante
+        participants = []
+        for item in response.data:
+            agent_nip = item.get('agent_nip')
+            agent_data = config.supabase.table(config.AGENTS_TABLE).select("*").eq("nip", agent_nip).execute().data
+            
+            if agent_data:
+                agent = agent_data[0]
+                full_name = f"{agent.get('nombre', '')} {agent.get('apellido1', '')} {agent.get('apellido2', '')}"
+                participants.append({
+                    'nip': agent_nip,
+                    'nombre': full_name.strip(),
+                    'seccion': agent.get('seccion', ''),
+                    'grupo': agent.get('grupo', '')
+                })
+                
+        return participants
     except Exception as e:
         st.error(f"Error al obtener los participantes: {str(e)}")
-        return pd.DataFrame()
+        return []
+
+@st.cache_data(ttl=300)  # Cache de 5 minutos
+def get_activity_details(activity_id):
+    """
+    Obtiene los detalles completos de una actividad específica
+    
+    Args:
+        activity_id: ID de la actividad
+        
+    Returns:
+        dict: Datos de la actividad o None si no existe
+    """
+    try:
+        response = config.supabase.table(config.ACTIVITIES_TABLE).select("*").eq("id", activity_id).execute()
+        
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        return None
+    except Exception as e:
+        st.error(f"Error al obtener los detalles de la actividad: {str(e)}")
+        return None
 
 @st.cache_data(ttl=600)  # Cache de 10 minutos
 def get_agent_name(nip):
