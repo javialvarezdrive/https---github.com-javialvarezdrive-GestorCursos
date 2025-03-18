@@ -758,22 +758,21 @@ def get_all_agents(active_only=False):
 def get_all_monitors():
     """
     Get all agents that can be assigned as monitors for activities
-    (Para mantener compatibilidad con el código existente, ahora devuelve todos los agentes activos)
+    Solo devuelve agentes activos que tienen monitor=True
     """
     try:
-        # Obtenemos todos los agentes activos, ya no filtramos por monitor=True
-        response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("activo", True).execute()
+        # Filtramos por monitor=True y activo=True
+        response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("monitor", True).eq("activo", True).execute()
         
         if response.data:
-            # Añadimos una etiqueta a los que son monitores
+            # Devolvemos solo monitores activos
             agents_df = pd.DataFrame(response.data)
             for i, agent in agents_df.iterrows():
-                if agent['monitor']:
-                    agents_df.at[i, 'nombre'] = f"{agent['nombre']} (Monitor)"
+                agents_df.at[i, 'nombre'] = f"{agent['nombre']} (Monitor)"
             return agents_df
         return pd.DataFrame()
     except Exception as e:
-        st.error(f"Error al obtener los agentes para selección de monitor: {str(e)}")
+        st.error(f"Error al obtener los monitores: {str(e)}")
         return pd.DataFrame()
 
 def get_all_courses(include_hidden=False):
