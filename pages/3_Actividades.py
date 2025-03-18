@@ -85,27 +85,29 @@ with tab1:
         fecha_actual = datetime.now().date()
         fecha_fin_default = fecha_actual + pd.Timedelta(days=30)
         
-        # Filtros en 3 columnas
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            # Filtro de rango de fechas
-            fecha_inicio = st.date_input("Fecha inicio", fecha_actual)
-            fecha_fin = st.date_input("Fecha fin", fecha_fin_default)
-        
-        with col2:
-            # Filtro de cursos
-            filtro_curso = st.multiselect("Filtrar por curso", ["Todos"] + cursos, default="Todos")
+        # Poner filtros en un expander
+        with st.expander("Filtros avanzados"):
+            # Filtros en 3 columnas
+            col1, col2, col3 = st.columns(3)
             
-            # Filtro de sección
-            filtro_seccion = st.multiselect("Filtrar por sección", ["Todas"] + secciones, default="Todas")
+            with col1:
+                # Filtro de rango de fechas
+                fecha_inicio = st.date_input("Fecha inicio", fecha_actual)
+                fecha_fin = st.date_input("Fecha fin", fecha_fin_default)
             
-        with col3:
-            # Filtro de monitor
-            filtro_monitor = st.multiselect("Filtrar por monitor", ["Todos"] + monitores, default="Todos")
-            
-            # Filtro de participante
-            filtro_participante = st.multiselect("Filtrar por participante", ["Todos"] + all_participants, default="Todos")
+            with col2:
+                # Filtro de cursos
+                filtro_curso = st.multiselect("Filtrar por curso", ["Todos"] + cursos, default="Todos")
+                
+                # Filtro de sección
+                filtro_seccion = st.multiselect("Filtrar por sección", ["Todas"] + secciones, default="Todas")
+                
+            with col3:
+                # Filtro de monitor
+                filtro_monitor = st.multiselect("Filtrar por monitor", ["Todos"] + monitores, default="Todos")
+                
+                # Filtro de participante
+                filtro_participante = st.multiselect("Filtrar por participante", ["Todos"] + all_participants, default="Todos")
         
         # Create a display dataframe with additional information
         display_df = pd.DataFrame()
