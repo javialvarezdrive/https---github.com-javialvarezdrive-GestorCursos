@@ -789,8 +789,13 @@ def setup_sidebar():
         if st.button("Cerrar Sesión", key="logout_sidebar_btn", on_click=logout, use_container_width=True):
             pass
 
+@st.cache_data(ttl=300)  # Cache de 5 minutos (300 segundos)
 def get_all_agents(active_only=False):
-    """Get all agents from database"""
+    """
+    Get all agents from database
+    
+    Esta función está cacheada durante 5 minutos para reducir consultas a la base de datos
+    """
     try:
         query = config.supabase.table(config.AGENTS_TABLE).select("*")
         if active_only:
@@ -805,10 +810,13 @@ def get_all_agents(active_only=False):
         st.error(f"Error al obtener los agentes: {str(e)}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=300)  # Cache de 5 minutos
 def get_all_monitors():
     """
     Get all agents that can be assigned as monitors for activities
     Solo devuelve agentes activos que tienen monitor=True
+    
+    Esta función está cacheada durante 5 minutos para reducir consultas a la base de datos
     """
     try:
         # Filtramos por monitor=True y activo=True
@@ -825,8 +833,13 @@ def get_all_monitors():
         st.error(f"Error al obtener los monitores: {str(e)}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=300)  # Cache de 5 minutos
 def get_all_courses(include_hidden=False):
-    """Get all courses from database"""
+    """
+    Get all courses from database
+    
+    Esta función está cacheada durante 5 minutos para reducir consultas a la base de datos
+    """
     try:
         query = config.supabase.table(config.COURSES_TABLE).select("*")
         if not include_hidden:
