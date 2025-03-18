@@ -1078,100 +1078,104 @@ def get_agents_activity_stats(start_date=None, end_date=None, curso_id=None, sec
     - DataFrame con las estadísticas
     """
     try:
-        # Construir la consulta SQL base
-        query = f"""
-        WITH agent_activities AS (
-            SELECT 
-                a.nip, 
-                COUNT(DISTINCT p.activity_id) as total_actividades
-            FROM 
-                {config.AGENTS_TABLE} a
-            LEFT JOIN 
-                {config.PARTICIPANTS_TABLE} p ON a.nip = p.agent_nip
-            LEFT JOIN 
-                {config.ACTIVITIES_TABLE} act ON p.activity_id = act.id
-            WHERE 
-                1=1
-        """
+        # Para desarrollo, vamos a usar pandas para combinar los datos
+        # En producción, se recomendaría usar SQL directo para mejor rendimiento
         
-        # Parámetros para la consulta
-        params = {}
+        # Obtener todos los agentes
+        agents_df = get_all_agents()
         
-        # Añadir filtros según los parámetros proporcionados
+        # Filtrar por sección si es necesario
+        if secciones and len(secciones) > 0:
+            agents_df = agents_df[agents_df['seccion'].isin(secciones)]
+        
+        # Filtrar por agentes específicos si es necesario
+        if agentes and len(agentes) > 0:
+            agents_df = agents_df[agents_df['nip'].isin(agentes)]
+        
+        # Si no hay agentes que cumplan los criterios, devolver DataFrame vacío
+        if agents_df.empty:
+            return pd.DataFrame(columns=['nip', 'nombre', 'apellidos', 'seccion', 'total_actividades'])
+        
+        # Obtener todas las actividades en el rango de fechas
+        activities_query = config.supabase.table(config.ACTIVITIES_TABLE).select("id, fecha, curso_id")
+        
+        # Aplicar filtro de fechas
         if start_date:
-            query += " AND act.fecha >= :start_date"
-            params['start_date'] = start_date.strftime("%Y-%m-%d")
+            activities_query = activities_query.gte("fecha", start_date.strftime("%Y-%m-%d"))
         
         if end_date:
-            query += " AND act.fecha <= :end_date"
-            params['end_date'] = end_date.strftime("%Y-%m-%d")
+            activities_query = activities_query.lte("fecha", end_date.strftime("%Y-%m-%d"))
         
+        # Aplicar filtro de curso
         if curso_id:
-            query += " AND act.curso_id = :curso_id"
-            params['curso_id'] = curso_id
-        
-        if secciones and len(secciones) > 0:
-            placeholders = [f":seccion_{i}" for i in range(len(secciones))]
-            query += f" AND a.seccion IN ({','.join(placeholders)})"
-            for i, seccion in enumerate(secciones):
-                params[f'seccion_{i}'] = seccion
-        
-        if agentes and len(agentes) > 0:
-            placeholders = [f":agente_{i}" for i in range(len(agentes))]
-            query += f" AND a.nip IN ({','.join(placeholders)})"
-            for i, agente in enumerate(agentes):
-                params[f'agente_{i}'] = agente
-        
-        # Completar la consulta con el GROUP BY
-        query += """
-            GROUP BY 
-                a.nip
-        )
-        SELECT 
-            a.nip, 
-            a.nombre, 
-            a.apellido1 || ' ' || COALESCE(a.apellido2, '') as apellidos, 
-            a.seccion,
-            COALESCE(aa.total_actividades, 0) as total_actividades
-        FROM 
-            {0} a
-        LEFT JOIN 
-            agent_activities aa ON a.nip = aa.nip
-        WHERE 
-            1=1
-        """.format(config.AGENTS_TABLE)
-        
-        # Aplicar filtros adicionales a la consulta principal si es necesario
-        if secciones and len(secciones) > 0:
-            placeholders = [f":seccion_main_{i}" for i in range(len(secciones))]
-            query += f" AND a.seccion IN ({','.join(placeholders)})"
-            for i, seccion in enumerate(secciones):
-                params[f'seccion_main_{i}'] = seccion
-        
-        if agentes and len(agentes) > 0:
-            placeholders = [f":agente_main_{i}" for i in range(len(agentes))]
-            query += f" AND a.nip IN ({','.join(placeholders)})"
-            for i, agente in enumerate(agentes):
-                params[f'agente_main_{i}'] = agente
-        
-        # Ordenar los resultados
-        query += """
-        ORDER BY 
-            total_actividades DESC, apellidos ASC, nombre ASC
-        """
+            activities_query = activities_query.eq("curso_id", curso_id)
         
         # Ejecutar la consulta
-        response = config.supabase.table("dummy").rpc("execute_sql", {"sql_query": query, "params": params}).execute()
+        activities_response = activities_query.execute()
         
-        # Convertir a DataFrame
-        if response.data:
-            df = pd.DataFrame(response.data)
-            # Rellenar valores nulos en total_actividades con 0
-            if 'total_actividades' in df.columns:
-                df['total_actividades'] = df['total_actividades'].fillna(0).astype(int)
-            return df
+        # Si no hay actividades que cumplan los criterios, crear resultados con contador 0
+        if not activities_response.data:
+            result_df = agents_df.copy()
+            # Crear apellidos concatenados
+            result_df['apellidos'] = result_df.apply(
+                lambda row: f"{row['apellido1']} {row['apellido2'] if pd.notna(row['apellido2']) else ''}", 
+                axis=1
+            )
+            # Añadir contador de actividades en 0
+            result_df['total_actividades'] = 0
+            # Seleccionar y ordenar columnas
+            result_df = result_df[['nip', 'nombre', 'apellidos', 'seccion', 'total_actividades']]
+            return result_df.sort_values('total_actividades', ascending=False)
+        
+        # Convertir actividades a DataFrame
+        activities_df = pd.DataFrame(activities_response.data)
+        
+        # Obtener participantes
+        participants_response = config.supabase.table(config.PARTICIPANTS_TABLE).select("agent_nip, activity_id").execute()
+        
+        if not participants_response.data:
+            # No hay participaciones, devolver agentes con contador 0
+            result_df = agents_df.copy()
+            result_df['apellidos'] = result_df.apply(
+                lambda row: f"{row['apellido1']} {row['apellido2'] if pd.notna(row['apellido2']) else ''}", 
+                axis=1
+            )
+            result_df['total_actividades'] = 0
+            result_df = result_df[['nip', 'nombre', 'apellidos', 'seccion', 'total_actividades']]
+            return result_df.sort_values('total_actividades', ascending=False)
+        
+        # Convertir participantes a DataFrame
+        participants_df = pd.DataFrame(participants_response.data)
+        
+        # Filtrar participantes para actividades en nuestro conjunto de datos
+        participants_df = participants_df[participants_df['activity_id'].isin(activities_df['id'])]
+        
+        # Contar actividades por agente
+        if not participants_df.empty:
+            agent_activities = participants_df.groupby('agent_nip')['activity_id'].nunique().reset_index()
+            agent_activities.columns = ['nip', 'total_actividades']
+            
+            # Combinar con datos de agentes
+            result_df = pd.merge(agents_df, agent_activities, on='nip', how='left')
+            
+            # Rellenar NaN con 0 para agentes sin actividades
+            result_df['total_actividades'] = result_df['total_actividades'].fillna(0).astype(int)
         else:
-            return pd.DataFrame(columns=['nip', 'nombre', 'apellidos', 'seccion', 'total_actividades'])
+            # No hay participaciones que cumplan los filtros
+            result_df = agents_df.copy()
+            result_df['total_actividades'] = 0
+        
+        # Crear columna de apellidos concatenados
+        result_df['apellidos'] = result_df.apply(
+            lambda row: f"{row['apellido1']} {row['apellido2'] if pd.notna(row['apellido2']) else ''}", 
+            axis=1
+        )
+        
+        # Seleccionar y ordenar columnas
+        result_df = result_df[['nip', 'nombre', 'apellidos', 'seccion', 'total_actividades']]
+        
+        # Ordenar por total de actividades (descendente)
+        return result_df.sort_values('total_actividades', ascending=False)
     
     except Exception as e:
         st.error(f"Error al obtener estadísticas: {str(e)}")
