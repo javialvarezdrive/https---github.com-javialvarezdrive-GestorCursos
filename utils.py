@@ -4,9 +4,100 @@ from datetime import datetime
 import config
 import random
 import string
+import os
+import json
+import base64
+import pickle
+from cryptography.fernet import Fernet
 
-# No usamos el componente de cookie_manager, simplemente usamos localStorage
-# con scripts JavaScript
+# Nuevo enfoque: guardar credenciales encriptadas en el sistema de archivos
+# para persistencia entre sesiones
+
+# Archivo para guardar credenciales
+SESSION_FILE = '.session'
+
+# Clave para encriptar (generada dinámicamente o fija para desarrollo)
+def get_encryption_key():
+    """Obtiene una clave de encriptación, generándola si no existe"""
+    key_file = '.key'
+    if os.path.exists(key_file):
+        with open(key_file, 'rb') as f:
+            return f.read()
+    else:
+        # Generar una nueva clave
+        key = Fernet.generate_key()
+        with open(key_file, 'wb') as f:
+            f.write(key)
+        return key
+
+def save_credentials(nip, password, remember=False):
+    """Guarda las credenciales encriptadas en un archivo si remember=True"""
+    if not remember:
+        # Si no se quiere recordar, borrar cualquier sesión guardada
+        if os.path.exists(SESSION_FILE):
+            os.remove(SESSION_FILE)
+        return False
+    
+    try:
+        # Crear objeto de encriptación
+        key = get_encryption_key()
+        fernet = Fernet(key)
+        
+        # Datos a guardar
+        data = {
+            'nip': nip,
+            'password': password,
+            'timestamp': int(time.time())
+        }
+        
+        # Serializar y encriptar
+        serialized = pickle.dumps(data)
+        encrypted = fernet.encrypt(serialized)
+        
+        # Guardar en archivo
+        with open(SESSION_FILE, 'wb') as f:
+            f.write(encrypted)
+            
+        return True
+    except Exception as e:
+        st.error(f"Error guardando credenciales: {str(e)}")
+        return False
+
+def load_credentials():
+    """Carga credenciales encriptadas desde archivo si existen"""
+    if not os.path.exists(SESSION_FILE):
+        return None
+    
+    try:
+        # Leer datos encriptados
+        with open(SESSION_FILE, 'rb') as f:
+            encrypted = f.read()
+        
+        # Desencriptar
+        key = get_encryption_key()
+        fernet = Fernet(key)
+        serialized = fernet.decrypt(encrypted)
+        
+        # Deserializar
+        data = pickle.loads(serialized)
+        
+        # Verificar expiración (opcional, por ahora no expira)
+        # if int(time.time()) - data['timestamp'] > 604800:  # 7 días
+        #    return None
+        
+        return data
+    except Exception as e:
+        st.error(f"Error cargando credenciales: {str(e)}")
+        if os.path.exists(SESSION_FILE):
+            os.remove(SESSION_FILE)  # Borrar archivo corrupto
+        return None
+
+def clear_saved_credentials():
+    """Elimina las credenciales guardadas"""
+    if os.path.exists(SESSION_FILE):
+        os.remove(SESSION_FILE)
+        return True
+    return False
 
 def save_session_to_cookie():
     """

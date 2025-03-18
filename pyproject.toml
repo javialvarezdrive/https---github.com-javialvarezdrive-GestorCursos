@@ -10,4 +10,5 @@ dependencies = [
     "streamlit-authenticator>=0.4.2",
     "streamlit>=1.43.2",
     "supabase>=2.13.0",
+    "cryptography>=44.0.2",
 ]

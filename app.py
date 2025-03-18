@@ -43,6 +43,10 @@ def init_session_state():
     if 'password_recovery' not in st.session_state:
         st.session_state.password_recovery = False
         
+    # Login form fields
+    if 'remember_me' not in st.session_state:
+        st.session_state.remember_me = False
+        
     # UI control flags
     if 'need_rerun' not in st.session_state:
         st.session_state.need_rerun = False
@@ -50,11 +54,6 @@ def init_session_state():
     # User role and permissions (for future use)
     if 'user_role' not in st.session_state:
         st.session_state.user_role = None
-        
-    # Intentar cargar la sesión de cookies - solo si no estamos autenticados
-    if not st.session_state.authenticated:
-        # Llamamos a load_session_from_cookie pero sin rerun para evitar bucles
-        utils.load_session_from_cookie()
 
 # Initialize all session state variables
 init_session_state()
@@ -64,6 +63,35 @@ def main():
     # Add a title
     st.title("👮‍♂️ Policía Local de Vigo")
     
+    # Intentar autenticar con credenciales guardadas
+    if not st.session_state.get("authenticated", False):
+        saved_credentials = utils.load_credentials()
+        if saved_credentials and 'nip' in saved_credentials and 'password' in saved_credentials:
+            # Intentar iniciar sesión con las credenciales guardadas
+            nip = saved_credentials['nip']
+            password = saved_credentials['password']
+            success, result = utils.verify_credentials(nip, password)
+            if success:
+                # Autenticación exitosa
+                user = result
+                st.session_state["authenticated"] = True
+                st.session_state["user_nip"] = nip  # Guardamos el NIP como identificador
+                st.session_state["user_data"] = user  # Guardamos todos los datos del usuario
+                
+                # Obtener el nombre del agente para mostrarlo en la interfaz
+                try:
+                    agent_name = utils.get_agent_name(nip)
+                    if agent_name != "Agente no encontrado" and agent_name != "Error":
+                        st.session_state.agent_name = agent_name
+                    else:
+                        st.session_state.agent_name = f"Agente {nip}"
+                except:
+                    st.session_state.agent_name = f"Agente {nip}"
+                
+                # Generate a new session ID when logged in
+                st.session_state.session_id = str(int(time.time()))
+                st.info("Sesión restaurada automáticamente")
+        
     # Intentar cargar sesión desde cookies si existe
     if not st.session_state.get("authenticated", False):
         utils.load_session_from_cookie()
@@ -86,6 +114,7 @@ def main():
             def process_login():
                 nip = st.session_state.nip_input
                 password = st.session_state.password_input
+                remember = st.session_state.get("remember_me", False)
                 
                 # Store form values in session state for persistence
                 st.session_state.form_nip = nip
@@ -114,16 +143,23 @@ def main():
                     # Generate a new session ID when logged in
                     st.session_state.session_id = str(int(time.time()))
                     
-                    # Guardar la sesión en la cookie para persistencia
+                    # Guardar la sesión en la cookie para persistencia web
                     utils.save_session_to_cookie()
+                    
+                    # Si se seleccionó "Recordar sesión", guardar las credenciales encriptadas
+                    utils.save_credentials(nip, password, remember)
                 else:
                     # Error de autenticación
                     st.session_state.login_error = result
+                    # Limpiar credenciales guardadas en caso de error
+                    utils.clear_saved_credentials()
             
             # Manually build a login form - no on_change callbacks in form
             with st.form("login_form", clear_on_submit=False):
                 st.text_input("NIP (Número de Identificación Personal)", key="nip_input", value=st.session_state.form_nip)
                 st.text_input("Contraseña", type="password", key="password_input", value=st.session_state.form_password)
+                st.checkbox("Recordar sesión", key="remember_me", value=st.session_state.get("remember_me", False),
+                            help="Guarda tus credenciales para iniciar sesión automáticamente en este dispositivo")
                 submit_button = st.form_submit_button("Acceder", on_click=process_login)
             
             # Display any login errors
@@ -208,6 +244,7 @@ def main():
             # Botón de cierre de sesión
             if st.button("Cerrar Sesión"):
                 utils.clear_session_cookie()
+                utils.clear_saved_credentials()  # Limpiar credenciales guardadas
                 st.session_state.clear()
                 st.rerun()
             
