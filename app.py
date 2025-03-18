@@ -283,11 +283,13 @@ def main():
 
     else:
         # Usuario autenticado - Mostrar interfaz principal
+        # Ocultar la página principal cuando el usuario inicia sesión
+        st.empty()  # Reemplazar el contenido principal con un espacio vacío
+        
         # Sidebar para navegación
         with st.sidebar:
             # Modo claro configurado en .streamlit/config.toml
-            st.markdown("### Navegación")
-
+            
             # Botón de cierre de sesión
             def logout():
                 # Usar el método nativo de Supabase para cerrar sesión
@@ -296,76 +298,12 @@ def main():
                 )  # Limpiar credenciales guardadas locales
                 st.session_state.need_rerun = True
 
-            if st.button("Cerrar Sesión", on_click=logout):
+            if st.button("Cerrar Sesión", on_click=logout, use_container_width=True):
                 pass
 
-        # Mostrar la página principal después de la autenticación
-        # Usamos el nombre del agente para la bienvenida si está disponible
-        if 'agent_name' in st.session_state:
-            st.write(f"## Bienvenido, {st.session_state.agent_name}")
-        else:
-            st.write(f"## Bienvenido, Agente {st.session_state.user_nip}")
-
-        st.write("## Sistema de Gestión de Agentes, Cursos y Actividades")
-
-        # Información sobre la aplicación
-        st.write("""
-        Esta aplicación permite la gestión de Agentes, Cursos y Actividades de la Policía Local de Vigo.
-        
-        Utiliza la barra lateral para navegar entre las diferentes secciones:
-        
-        1. **Agentes**: Gestión de los agentes de la Policía Local
-        2. **Cursos**: Gestión de los cursos disponibles
-        3. **Actividades**: Programación y gestión de actividades
-        4. **Estadísticas**: Visualización de datos y estadísticas
-        """)
-
-        # Mostrar algunas estadísticas básicas
-        col1, col2, col3 = st.columns(3)
-
-        # Agents count
-        try:
-            agents_df = utils.get_all_agents()
-            active_agents = len(agents_df[agents_df['activo'] ==
-                                          True]) if not agents_df.empty else 0
-            total_agents = len(agents_df) if not agents_df.empty else 0
-
-            with col1:
-                st.metric("Agentes Activos", active_agents,
-                          f"{active_agents}/{total_agents}")
-        except:
-            with col1:
-                st.metric("Agentes Activos", "Error", "")
-
-        # Courses count
-        try:
-            courses_df = utils.get_all_courses(include_hidden=True)
-            visible_courses = len(courses_df[
-                courses_df['ocultar'] == False]) if not courses_df.empty else 0
-            total_courses = len(courses_df) if not courses_df.empty else 0
-
-            with col2:
-                st.metric("Cursos Visibles", visible_courses,
-                          f"{visible_courses}/{total_courses}")
-        except:
-            with col2:
-                st.metric("Cursos Visibles", "Error", "")
-
-        # Activities count
-        try:
-            activities_df = utils.get_all_activities()
-            activities_count = len(
-                activities_df) if not activities_df.empty else 0
-
-            with col3:
-                st.metric("Actividades Programadas", activities_count)
-        except:
-            with col3:
-                st.metric("Actividades Programadas", "Error")
-
-        # Footer
-        st.markdown("---")
-        st.markdown("© 2023 Policía Local de Vigo - Sistema de Gestión")
+        # La página principal se ocultará después de la autenticación
+        # No mostramos contenido para dirigir al usuario a usar las pestañas
+        pass
 
 
 if __name__ == "__main__":

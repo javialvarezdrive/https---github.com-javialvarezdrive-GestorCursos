@@ -8,3 +8,10 @@ primaryColor = "#0066cc"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f0f2f6"
 textColor = "#262730"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Cambiar el nombre de la página principal de "App" a "Iniciar sesión"
+toolbarTitle = "Gestión Policía Local"
