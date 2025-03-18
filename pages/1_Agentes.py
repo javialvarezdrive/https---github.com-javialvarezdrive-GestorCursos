@@ -234,26 +234,48 @@ with tab3:
                             st.error(f"Error: {str(e)}")
                 
                 if delete_button:
+                    # Define key for tracking deletion confirmation for this agent
+                    confirm_delete_key = f"confirm_delete_{nip}"
+                    
+                    # Initialize key in session state if it doesn't exist
+                    if confirm_delete_key not in st.session_state:
+                        st.session_state[confirm_delete_key] = False
+                    
                     # Delete agent confirmation
                     st.warning(f"¿Estás seguro de que deseas eliminar al agente {nombre} {apellido1}?")
                     
-                    # Create confirmation buttons
+                    # Create confirmation buttons outside the form
                     col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("Sí, eliminar"):
+                    
+                    # Create a form for confirmation buttons
+                    with st.form(key=f"confirm_delete_form_{nip}"):
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            confirm_delete = st.form_submit_button("Sí, eliminar")
+                        with c2:
+                            cancel_delete = st.form_submit_button("No, cancelar")
+                            
+                        if confirm_delete:
                             try:
                                 # Delete agent
                                 result = config.supabase.table(config.AGENTS_TABLE).delete().eq("nip", nip).execute()
                                 
                                 if result.data:
+                                    st.session_state[confirm_delete_key] = True
                                     st.success(f"Agente {nombre} {apellido1} eliminado correctamente")
-                                    st.rerun()
+                                    # Use a rerun flag in session state
+                                    st.session_state.need_rerun = True
                                 else:
                                     st.error("Error al eliminar el agente")
                             except Exception as e:
                                 st.error(f"Error: {str(e)}")
-                    with col2:
-                        if st.button("No, cancelar"):
-                            st.rerun()
+                                
+                        if cancel_delete:
+                            st.session_state[confirm_delete_key] = False
+                    
+                    # Check if rerun is needed
+                    if st.session_state.get("need_rerun", False):
+                        st.session_state.need_rerun = False
+                        st.rerun()
     else:
         st.warning("No hay agentes disponibles para editar.")

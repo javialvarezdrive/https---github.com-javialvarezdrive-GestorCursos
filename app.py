@@ -16,20 +16,33 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Setup session state variables with session persistence
-if 'session_id' not in st.session_state:
-    # Generate a unique session ID for this session
-    st.session_state.session_id = str(int(time.time()))
+# Initialize all session state variables
+def init_session_state():
+    # Generate a persistent session ID
+    if 'session_id' not in st.session_state:
+        # Generate a unique session ID for this session
+        st.session_state.session_id = str(int(time.time()))
 
-# Setup authentication state
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
+    # Authentication variables
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
 
-if 'username' not in st.session_state:
-    st.session_state.username = None
+    if 'username' not in st.session_state:
+        st.session_state.username = None
 
-if 'password_recovery' not in st.session_state:
-    st.session_state.password_recovery = False
+    if 'password_recovery' not in st.session_state:
+        st.session_state.password_recovery = False
+        
+    # UI control flags
+    if 'need_rerun' not in st.session_state:
+        st.session_state.need_rerun = False
+        
+    # User role and permissions (for future use)
+    if 'user_role' not in st.session_state:
+        st.session_state.user_role = None
+
+# Initialize all session state variables
+init_session_state()
 
 # Main function
 def main():
