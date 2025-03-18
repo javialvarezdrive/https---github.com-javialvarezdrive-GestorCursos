@@ -51,9 +51,13 @@ def main():
     # Add a title
     st.title("👮‍♂️ Policía Local de Vigo")
     
+    # Intentar cargar sesión desde cookies si existe
+    if not st.session_state.get("authenticated", False):
+        utils.load_session_from_cookie()
+        
     # If not authenticated, show login or password recovery
-    if not st.session_state.authenticated:
-        if not st.session_state.password_recovery:
+    if not st.session_state.get("authenticated", False):
+        if not st.session_state.get("password_recovery", False):
             # Show login form
             st.subheader("Iniciar Sesión")
             
@@ -96,6 +100,9 @@ def main():
                     
                     # Generate a new session ID when logged in
                     st.session_state.session_id = str(int(time.time()))
+                    
+                    # Guardar la sesión en la cookie para persistencia
+                    utils.save_session_to_cookie()
                 else:
                     # Error de autenticación
                     st.session_state.login_error = result
@@ -184,6 +191,12 @@ def main():
         with st.sidebar:
             # Modo claro configurado en .streamlit/config.toml
             st.markdown("### Navegación")
+            
+            # Botón de cierre de sesión
+            if st.button("Cerrar Sesión"):
+                utils.clear_session_cookie()
+                st.session_state.clear()
+                st.rerun()
             
         # Show the main page after authentication
         # Usamos el nombre del agente para la bienvenida si está disponible

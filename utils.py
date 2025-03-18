@@ -5,6 +5,121 @@ import config
 import random
 import string
 
+def save_session_to_cookie():
+    """
+    Guarda la información de sesión en una cookie para persistencia
+    """
+    if st.session_state.get("authenticated", False):
+        # Creamos un token persistente (simplificado)
+        import json
+        import time
+        import base64
+        
+        # Token persistente que contiene NIP y timestamp
+        session_data = {
+            "user_nip": st.session_state.get("user_nip"),
+            "timestamp": int(time.time()),
+            "session_id": st.session_state.get("session_id", str(int(time.time())))
+        }
+        
+        # En una implementación real, deberíamos firmar este token
+        session_token = base64.b64encode(json.dumps(session_data).encode()).decode()
+        
+        # Guardar el token en una cookie
+        st.session_state["_persistent_token"] = session_token
+        
+        # Establecer la cookie via JavaScript
+        js = f"""
+        <script>
+        localStorage.setItem('streamlit_auth_token', '{session_token}');
+        console.log('Sesión guardada en localStorage');
+        </script>
+        """
+        st.markdown(js, unsafe_allow_html=True)
+
+def load_session_from_cookie():
+    """
+    Carga la información de sesión desde una cookie si existe
+    """
+    # Intenta cargar el token desde localStorage mediante JavaScript
+    js = """
+    <script>
+    const token = localStorage.getItem('streamlit_auth_token');
+    if (token) {
+        window.parent.postMessage({
+            type: "streamlit:setComponentValue",
+            value: token
+        }, "*");
+        console.log('Token de sesión recuperado');
+    }
+    </script>
+    """
+    st.markdown(js, unsafe_allow_html=True)
+    
+    # Esperar el token desde el callback de JavaScript
+    if "token_received" not in st.session_state:
+        token_placeholder = st.empty()
+        token = token_placeholder.text_input("", key="token_input", label_visibility="collapsed")
+        token_placeholder.empty()
+        
+        if token:
+            try:
+                import json
+                import base64
+                
+                # Decodificar el token
+                session_data = json.loads(base64.b64decode(token).decode())
+                
+                # Restaurar la sesión
+                st.session_state["user_nip"] = session_data.get("user_nip")
+                st.session_state["session_id"] = session_data.get("session_id")
+                
+                # Verificar que el usuario existe en la base de datos
+                user = get_user_by_nip(session_data.get("user_nip"))
+                if user:
+                    st.session_state["authenticated"] = True
+                    st.session_state["user_data"] = user
+                    
+                    # Obtener el nombre del agente
+                    agent_name = get_agent_name(session_data.get("user_nip"))
+                    if agent_name != "Agente no encontrado" and agent_name != "Error":
+                        st.session_state["agent_name"] = agent_name
+                    else:
+                        st.session_state["agent_name"] = f"Agente {session_data.get('user_nip')}"
+                    
+                    st.session_state["token_received"] = True
+                    st.rerun()
+            except Exception as e:
+                # Si hay un error, ignoramos el token
+                st.session_state["token_received"] = True
+                pass
+
+def clear_session_cookie():
+    """
+    Elimina la cookie de sesión
+    """
+    js = """
+    <script>
+    localStorage.removeItem('streamlit_auth_token');
+    console.log('Sesión eliminada de localStorage');
+    </script>
+    """
+    st.markdown(js, unsafe_allow_html=True)
+    
+    # Limpiar variables de sesión
+    if "authenticated" in st.session_state:
+        st.session_state["authenticated"] = False
+    if "user_nip" in st.session_state:
+        st.session_state["user_nip"] = None
+    if "user_data" in st.session_state:
+        st.session_state["user_data"] = None
+    if "agent_name" in st.session_state:
+        st.session_state["agent_name"] = None
+    if "_persistent_token" in st.session_state:
+        del st.session_state["_persistent_token"]
+    if "token_received" in st.session_state:
+        del st.session_state["token_received"]
+
 def check_authentication():
     """
     Check if user is authenticated and ensure session state is properly initialized
@@ -23,8 +138,12 @@ def check_authentication():
     if "agent_name" not in st.session_state:
         st.session_state["agent_name"] = None
     
+    # Si no está autenticado, intentamos cargar la sesión desde la cookie
+    if not st.session_state.get("authenticated", False):
+        load_session_from_cookie()
+    
     # Check if user is authenticated and verify with Supabase
-    if not st.session_state["authenticated"] or not st.session_state["user_nip"]:
+    if not st.session_state.get("authenticated", False) or not st.session_state.get("user_nip"):
         st.warning("Por favor, inicia sesión para acceder a esta página.")
         st.stop()
     else:
@@ -32,18 +151,21 @@ def check_authentication():
         try:
             user = get_user_by_nip(st.session_state["user_nip"])
             if not user:
-                st.session_state["authenticated"] = False
+                clear_session_cookie()
                 st.warning("Sesión expirada. Por favor, inicia sesión nuevamente.")
                 st.stop()
+            
+            # Si la sesión es válida, guardamos la cookie para futuras visitas
+            save_session_to_cookie()
+            
         except Exception as e:
             st.error(f"Error de autenticación: {str(e)}")
-            st.session_state["authenticated"] = False
+            clear_session_cookie()
             st.stop()
         
     # Make the session persistent with unique session ID
     # This method uses session state's persistence to maintain login state
-    current_session_id = st.session_state.session_id
-    if not current_session_id:
+    if "session_id" not in st.session_state:
         import time
         st.session_state.session_id = str(int(time.time()))
 
