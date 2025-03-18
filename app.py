@@ -77,9 +77,9 @@ def main():
                 if success:
                     # Autenticación exitosa
                     user = result
-                    st.session_state.authenticated = True
-                    st.session_state.username = nip  # Guardamos el NIP como identificador
-                    st.session_state.user_data = user  # Guardamos todos los datos del usuario
+                    st.session_state["authenticated"] = True
+                    st.session_state["username"] = nip  # Guardamos el NIP como identificador
+                    st.session_state["user_data"] = user  # Guardamos todos los datos del usuario
                     st.session_state.login_error = ""
                     
                     # Obtener el nombre del agente para mostrarlo en la interfaz

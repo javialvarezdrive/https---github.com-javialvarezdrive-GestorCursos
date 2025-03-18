@@ -10,25 +10,31 @@ def check_authentication():
     Check if user is authenticated and ensure session state is properly initialized
     This function ensures a consistent state across all pages
     """
-    # Initialize all session state variables
+    # Initialize all session state variables with persistence
     if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
+        st.session_state["authenticated"] = False
     
     if "username" not in st.session_state:
-        st.session_state.username = None
+        st.session_state["username"] = None
         
     if "session_id" not in st.session_state:
         import time
-        st.session_state.session_id = str(int(time.time()))
+        st.session_state["session_id"] = str(int(time.time()))
         
     if "user_role" not in st.session_state:
-        st.session_state.user_role = None
+        st.session_state["user_role"] = None
         
     if "need_rerun" not in st.session_state:
-        st.session_state.need_rerun = False
+        st.session_state["need_rerun"] = False
+
+    if "user_data" not in st.session_state:
+        st.session_state["user_data"] = None
+
+    if "agent_name" not in st.session_state:
+        st.session_state["agent_name"] = None
     
     # Check if user is authenticated
-    if not st.session_state.authenticated:
+    if not st.session_state["authenticated"]:
         # Redirect to main app for login
         st.warning("Por favor, inicia sesión para acceder a esta página.")
         st.stop()
