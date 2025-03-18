@@ -66,15 +66,27 @@ with tab1:
         if "reset_filters" not in st.session_state:
             st.session_state.reset_filters = False
         
-        # Crear filtros en un expander
-        with st.expander("Filtros avanzados", expanded=True):
-            # Botón para limpiar filtros
-            col_btn, _ = st.columns([1, 3])
-            with col_btn:
-                if st.button("🔄 Limpiar filtros", key="clean_filters"):
-                    st.session_state.reset_filters = True
-                    st.rerun()
-            
+        # Fila para el botón de limpiar filtros y el cuadro de búsqueda
+        col_btn, col_search = st.columns([1, 3])
+        
+        with col_btn:
+            if st.button("🔄 Limpiar filtros", key="clean_filters"):
+                st.session_state.reset_filters = True
+                st.rerun()
+        
+        with col_search:
+            # Search functionality with dynamic behavior
+            search_query = st.text_input(
+                "Buscar agente por NIP, nombre, apellidos, email, teléfono...",
+                placeholder="El filtro se aplica mientras escribes...",
+                key="agent_search",
+                # Limpiar el campo de búsqueda si se ha pulsado el botón de limpiar filtros
+                value="" if st.session_state.reset_filters else st.session_state.get("agent_search", ""),
+                on_change=lambda: None,  # Esto fuerza la reejecución cuando se escribe
+            )
+        
+        # Crear filtros en un expander (colapsado por defecto)
+        with st.expander("Filtros avanzados", expanded=False):
             # Columnas para los filtros
             col1, col2 = st.columns(2)
             
@@ -105,16 +117,6 @@ with tab1:
             # Resetear el estado después de aplicar
             if st.session_state.reset_filters:
                 st.session_state.reset_filters = False
-        
-        # Search functionality with dynamic behavior
-        search_query = st.text_input(
-            "Buscar agente por NIP, nombre, apellidos, email, teléfono...",
-            placeholder="El filtro se aplica mientras escribes...",
-            key="agent_search",
-            # Limpiar el campo de búsqueda si se ha pulsado el botón de limpiar filtros
-            value="" if st.session_state.reset_filters else st.session_state.get("agent_search", ""),
-            on_change=lambda: None,  # Esto fuerza la reejecución cuando se escribe
-        )
         
         # Aplicar filtros y rastrear qué filtros están activos
         filtered_df = agents_df.copy()
