@@ -742,23 +742,102 @@ def format_bool(value):
 def setup_sidebar():
     """
     Configura la barra lateral para todas las páginas.
-    Agrega el botón de cerrar sesión y oculta la palabra 'Navegación'.
+    Agrega el botón de cerrar sesión, toggle de modo oscuro y oculta la palabra 'Navegación'.
     Si el usuario está autenticado, también oculta el enlace a login.
     """
+    # Inicializar el modo oscuro en session_state si no existe
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = False
+    
+    # Definir CSS para el modo oscuro
+    dark_mode_css = """
+    /* Estilos para modo oscuro */
+    body {
+        color: #f0f2f6;
+        background-color: #0e1117;
+    }
+    .main .block-container, 
+    .stApp {
+        background-color: #0e1117;
+    }
+    div[data-testid="stDecoration"] {
+        background-image: linear-gradient(90deg, #4267B2, #1e3a8a);
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: #1a1c25;
+    }
+    .stTabs [data-baseweb="tab"] {
+        color: #f0f2f6;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #4267B2;
+        color: white;
+    }
+    .stButton>button {
+        background-color: #4267B2 !important;
+        color: white !important;
+    }
+    .stTextInput>div>div>input {
+        background-color: #1a1c25;
+        color: white;
+    }
+    .stSelectbox>div>div>div {
+        background-color: #1a1c25;
+        color: white;
+    }
+    .stMultiSelect>div>div>div {
+        background-color: #1a1c25;
+        color: white;
+    }
+    div[data-testid="stSidebar"] {
+        background-color: #111318;
+    }
+    div[data-testid="stSidebar"] .block-container {
+        background-color: #111318;
+    }
+    .stDataFrame {
+        background-color: #1a1c25;
+        color: white;
+    }
+    div[data-testid="stTable"] {
+        background-color: #1a1c25;
+        color: white;
+    }
+    div.stMarkdown p {
+        color: #f0f2f6;
+    }
+    div.stMarkdown h1, div.stMarkdown h2, div.stMarkdown h3 {
+        color: #f0f2f6;
+    }
+    section[data-testid="stSidebar"] li a {
+        color: #f0f2f6;
+    }
+    """
+    
+    # Aplicar CSS según el tema seleccionado
+    st.markdown(
+        f"""
+        <style>
+        /* Ocultar elementos por defecto */
+        .css-1aumxhk {{
+            display: none !important;
+        }}
+        
+        /* Cambiar color de botones independiente del tema */
+        .stButton>button {{
+            background-color: #4267B2 !important;
+            color: white !important;
+        }}
+        
+        /* Modo oscuro si está activado */
+        {dark_mode_css if st.session_state.dark_mode else ""}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
     # Agregar botón de cerrar sesión en la barra lateral
     with st.sidebar:
-        # Ocultar la palabra "Navegación" que viene por defecto
-        st.markdown(
-            """
-            <style>
-            .css-1aumxhk {
-                display: none !important;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-        
         # Si está autenticado, ocultar enlace a login en el sidebar
         is_authenticated = check_supabase_auth()
         if is_authenticated:
@@ -775,18 +854,34 @@ def setup_sidebar():
                 unsafe_allow_html=True
             )
         
-        # Agregar espacio al final de la barra lateral
-        st.markdown("---")  # Separador
-        
         # Función para cerrar sesión
         def logout():
             clear_supabase_session()
             clear_saved_credentials()
             # Redirigir a la página principal
             st.session_state.need_rerun = True
-            
-        # Agregar botón de cierre de sesión
-        if st.button("Cerrar Sesión", key="logout_sidebar_btn", on_click=logout, use_container_width=True):
+        
+        # Sección de cerrar sesión si está autenticado
+        if is_authenticated:
+            # Agregar botón de cierre de sesión
+            if st.button("Cerrar Sesión", key="logout_sidebar_btn", on_click=logout, use_container_width=True):
+                pass
+        
+        # Agregar espacio al final de la barra lateral
+        st.sidebar.markdown("---")  # Separador
+        
+        # Sección de configuración
+        st.sidebar.markdown("### Configuración")
+        
+        # Función para alternar el modo oscuro
+        def toggle_dark_mode():
+            st.session_state.dark_mode = not st.session_state.dark_mode
+            # Forzar recarga para aplicar tema
+            st.rerun()
+        
+        # Toggle de modo oscuro
+        mode_label = "🌙 Desactivar modo oscuro" if st.session_state.dark_mode else "🌙 Activar modo oscuro"
+        if st.sidebar.button(mode_label, key="dark_mode_toggle", use_container_width=True, on_click=toggle_dark_mode):
             pass
 
 @st.cache_data(ttl=300)  # Cache de 5 minutos (300 segundos)
