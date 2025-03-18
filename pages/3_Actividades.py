@@ -122,15 +122,16 @@ with tab1:
             try:
                 curso_nombre = "Sin curso"
                 seccion = "Sin sección"
-                if activity['curso_id']:
+                if activity['curso_id'] is not None:
                     curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre", "seccion").eq("id", activity['curso_id']).execute()
-                    if curso_response.data:
+                    if curso_response.data and len(curso_response.data) > 0:
                         curso_info = curso_response.data[0]
-                        curso_nombre = curso_info['nombre']
+                        curso_nombre = curso_info.get('nombre', 'Sin nombre')
                         seccion = curso_info.get('seccion', 'Sin sección')
-            except:
-                curso_nombre = "Error"
-                seccion = "Error"
+            except Exception as e:
+                st.error(f"Error al obtener el curso: {str(e)}")
+                curso_nombre = "Sin curso"
+                seccion = "Sin sección"
             
             # Get monitor name
             try:
@@ -247,12 +248,13 @@ with tab2:
             # Get course name
             try:
                 curso_nombre = "Sin curso"
-                if activity['curso_id']:
+                if activity['curso_id'] is not None:
                     curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
-                    if curso_response.data:
-                        curso_nombre = curso_response.data[0]['nombre']
-            except:
-                curso_nombre = "Error"
+                    if curso_response.data and len(curso_response.data) > 0:
+                        curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
+            except Exception as e:
+                st.error(f"Error al obtener el curso para el calendario: {str(e)}")
+                curso_nombre = "Sin curso"
             
             # Get monitor name
             try:
@@ -451,10 +453,14 @@ with tab4:
         for _, activity in activities_df.iterrows():
             # Get course name
             try:
-                curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
-                curso_nombre = curso_response.data[0]['nombre'] if curso_response.data else "Sin curso"
-            except:
-                curso_nombre = "Error"
+                curso_nombre = "Sin curso"
+                if activity['curso_id'] is not None:
+                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
+                    if curso_response.data and len(curso_response.data) > 0:
+                        curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
+            except Exception as e:
+                st.error(f"Error al obtener el curso: {str(e)}")
+                curso_nombre = "Sin curso"
             
             # Format date
             fecha_formatted = utils.format_date(activity['fecha'])
@@ -638,14 +644,17 @@ with tab4:
                 with col2:
                     # Get course details
                     try:
-                        if activity_data['curso_id']:
+                        curso_nombre = "Sin curso asignado"
+                        if activity_data['curso_id'] is not None:
                             curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity_data['curso_id']).execute()
-                            curso_nombre = curso_response.data[0]['nombre'] if curso_response.data else 'Sin curso'
+                            if curso_response.data and len(curso_response.data) > 0:
+                                curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
                             st.write(f"**Curso:** {curso_nombre}")
                         else:
                             st.write("**Curso:** Sin curso asignado")
-                    except:
-                        st.write("**Curso:** Error al cargar")
+                    except Exception as e:
+                        st.error(f"Error al obtener el curso para los detalles: {str(e)}")
+                        st.write("**Curso:** Sin curso asignado")
                     
                     # Get monitor details
                     try:
