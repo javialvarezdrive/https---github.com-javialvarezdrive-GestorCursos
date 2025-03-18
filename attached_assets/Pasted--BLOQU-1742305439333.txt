@@ -1,0 +1,68 @@
+------------------------------------------------------------------------------------------
+-- BLOQUE DE CÓDIGO SQL PARA VERIFICAR SI UN USUARIO AUTENTICADO ES MONITOR
+------------------------------------------------------------------------------------------
+
+-- FUNCIÓN SQL PARA VERIFICAR SI UN USUARIO AUTENTICADO ES MONITOR BASÁNDOSE EN SU EMAIL
+-- Esta función consulta la tabla 'agents' usando el email proporcionado y devuelve TRUE si
+-- encuentra un agente con ese email y la columna 'monitor' es TRUE, FALSE en caso contrario.
+CREATE OR REPLACE FUNCTION is_authenticated_user_monitor(authenticated_user_email VARCHAR)
+RETURNS BOOLEAN AS $$
+DECLARE
+    is_monitor BOOLEAN; -- Variable local para almacenar el resultado (TRUE/FALSE)
+BEGIN
+    -- Consulta SQL para seleccionar el valor de la columna 'monitor' de la tabla 'agents'
+    -- WHERE la columna 'email' coincida con el email del usuario autenticado proporcionado como parámetro.
+    SELECT monitor INTO is_monitor
+    FROM agents
+    WHERE email = authenticated_user_email;
+
+    -- Devuelve el valor de 'is_monitor' (TRUE si es monitor, FALSE si no o si no se encuentra el agente).
+    RETURN is_monitor;
+END;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER; -- SECURITY DEFINER asegura que la función se ejecuta con los permisos del creador de la función,
+                   -- importante para controlar el acceso a los datos.
+
+
+------------------------------------------------------------------------------------------
+-- EJEMPLO DE LLAMADA A LA FUNCIÓN SQL 'is_authenticated_user_monitor'
+------------------------------------------------------------------------------------------
+
+-- Para probar la función, reemplaza 'email_del_usuario_autenticado@ejemplo.com'
+-- con el email real del usuario autenticado que quieres verificar.
+SELECT is_authenticated_user_monitor('email_del_usuario_autenticado@ejemplo.com');
+
+
+------------------------------------------------------------------------------------------
+-- BLOQUE DE CÓDIGO JAVASCRIPT (LADO CLIENTE) PARA OBTENER EL EMAIL DEL USUARIO AUTENTICADO
+-- USANDO SUPABASE AUTH
+------------------------------------------------------------------------------------------
+
+/*
+//  **IMPORTANTE:** Este es un ejemplo de código JavaScript para el lado del cliente (frontend).
+//  Necesitarás tener configurado el cliente de Supabase en tu aplicación JavaScript.
+
+//  1. Obtener la sesión actual del usuario autenticado desde Supabase Auth.
+//     `supabase` debe ser tu instancia del cliente de Supabase ya inicializada.
+const { data: { session } } = await supabase.auth.getSession();
+
+//  2. Extraer el email del usuario desde el objeto de sesión.
+//     Si hay una sesión y un usuario en la sesión, se accede a la propiedad 'email'.
+const userEmail = session?.user?.email;
+
+//  3. Ahora 'userEmail' contiene el email del usuario autenticado (si está autenticado).
+//     Puedes usar 'userEmail' para:
+//     - Enviar este email a tu backend (por ejemplo, a una función de Supabase o a tu API)
+//       para llamar a la función SQL 'is_authenticated_user_monitor' y verificar si es monitor.
+//     - Mostrar información diferente en la interfaz de usuario dependiendo de si es monitor o no.
+
+//  EJEMPLO de cómo podrías usar 'userEmail' (esto es solo un ejemplo,
+//  la implementación real dependerá de tu aplicación):
+if (userEmail) {
+    console.log("Email del usuario autenticado:", userEmail);
+    //  Aquí podrías llamar a tu función de Supabase o API backend
+    //  pasando 'userEmail' para verificar si es monitor.
+} else {
+    console.log("Usuario no autenticado.");
+}
+*/
