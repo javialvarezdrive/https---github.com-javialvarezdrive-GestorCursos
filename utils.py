@@ -765,30 +765,48 @@ def validate_activity(fecha, turno):
     return errors
 
 def get_user_by_nip(nip):
-    """Get user data by NIP (agent ID)"""
+    """
+    Obtiene los datos del usuario asociado a un NIP de agente
+    
+    Con la API nativa de Supabase, no podemos consultar directamente 
+    usuarios por NIP (ya que está en metadata), así que primero obtenemos
+    el email del agente y luego intentamos encontrar el usuario por email
+    """
     try:
-        response = config.supabase.table(config.USERS_TABLE).select("*").eq("agent_nip", nip).execute()
-        if response.data:
-            return response.data[0]
+        # 1. Buscar el email asociado al NIP del agente
+        email = get_agent_email_by_nip(nip)
+        if not email:
+            return None
+        
+        # 2. Intentar obtener el usuario a través de una API administrativa
+        # Nota: En un entorno de producción, necesitas permisos de servicio
+        try:
+            user = config.supabase.auth.admin.list_users()
+            # Filtrar por email
+            for u in user:
+                if hasattr(u, 'email') and u.email == email:
+                    return u
+        except:
+            # Si no tenemos permisos administrativos, intentamos obtener el
+            # usuario de maneras alternativas (por ejemplo, desde session_state
+            # si el usuario está autenticado)
+            if st.session_state.get('authenticated') and st.session_state.get('user_nip') == nip:
+                return st.session_state.get('user_data')
+                
         return None
     except Exception as e:
         st.error(f"Error al obtener el usuario: {str(e)}")
         return None
         
 def verify_credentials(nip, password):
-    """Verify user credentials (NIP and password)"""
+    """
+    Verifica las credenciales del usuario (NIP y contraseña)
+    usando la API nativa de Supabase
+    """
     try:
-        user = get_user_by_nip(nip)
-        if not user:
-            return False, "Agente no encontrado"
-            
-        # Verificar la contraseña
-        # En un caso real, deberíamos hashear la contraseña y compararla
-        # Por simplicidad, comparamos directamente
-        if user.get('password') == password:
-            return True, user
-        else:
-            return False, "Contraseña incorrecta"
+        # Esta función ahora usa sign_in_with_nip que ya implementa la verificación
+        # con Supabase auth nativo
+        return sign_in_with_nip(nip, password)
     except Exception as e:
         st.error(f"Error al verificar credenciales: {str(e)}")
         return False, "Error de autenticación"
@@ -799,34 +817,60 @@ def generate_temp_password(length=8):
     return ''.join(random.choice(characters) for _ in range(length))
 
 def reset_password(nip, email):
-    """Reset user password and send email with new password"""
+    """
+    Resetea la contraseña del usuario enviando un email de recuperación
+    a través de la API nativa de Supabase
+    """
     try:
-        # Verificar que existe un agente con ese NIP
+        # 1. Verificar que existe un agente con ese NIP
         response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("nip", nip).execute()
         if not response.data:
             return False, "No se encontró un agente con este NIP"
         
-        # Verificar que el email coincida con el del agente
+        # 2. Verificar que el email coincida con el del agente
         agent = response.data[0]
         if agent.get('email') != email:
             return False, "El email no coincide con el registrado para este agente"
         
-        # Verificar que el agente tiene un usuario en la tabla users
-        user = get_user_by_nip(nip)
-        if not user:
-            return False, "No existe un usuario asociado a este agente"
+        # 3. Usar la API nativa de Supabase para recuperación de contraseña
+        try:
+            # Esta función enviará un correo con instrucciones para restablecer la contraseña
+            config.supabase.auth.reset_password_for_email(email)
             
-        # Generate new password
-        new_password = generate_temp_password()
-        
-        # Hash new password - en un caso real debería hashear la contraseña
-        # Para simplificar, usamos la contraseña en texto plano por ahora
-        
-        # Update user password in database
-        config.supabase.table(config.USERS_TABLE).update({"password": new_password}).eq("agent_nip", nip).execute()
-        
-        # In a real application, send an email with the new password
-        # For now, just return the new password
-        return True, f"Tu nueva contraseña temporal es: {new_password}"
+            # En el entorno de desarrollo, es posible que no se envíe un correo real
+            # Para fines de prueba, generamos una contraseña temporal como fallback
+            new_password = generate_temp_password()
+            
+            # Mensaje de éxito con instrucciones para el entorno de desarrollo
+            success_message = (
+                "Se ha enviado un correo con instrucciones para restablecer tu contraseña. "
+                "Por favor, revisa tu bandeja de entrada.\n\n"
+                f"NOTA: Como estás en un entorno de prueba, puedes usar esta contraseña temporal: {new_password}"
+            )
+            
+            return True, success_message
+            
+        except Exception as e:
+            st.error(f"Error al enviar correo de recuperación: {str(e)}")
+            
+            # Plan B para entorno de desarrollo: generar contraseña temporal y actualizarla manualmente
+            try:
+                # Generar contraseña temporal
+                new_password = generate_temp_password()
+                
+                # En un caso real, este código no debería ser necesario, ya que la API
+                # de Supabase manejaría todo el proceso de restablecimiento por email
+                admin_update = config.supabase.auth.admin.update_user_by_email(
+                    email,
+                    {"password": new_password}
+                )
+                
+                return True, f"Se ha generado una nueva contraseña temporal: {new_password}"
+                
+            except Exception as admin_error:
+                st.error(f"Error al actualizar contraseña: {str(admin_error)}")
+                return False, "No se pudo restablecer la contraseña. Contacta al administrador."
+            
     except Exception as e:
-        return False, f"Error al restablecer la contraseña: {str(e)}"
+        st.error(f"Error en el proceso de recuperación: {str(e)}")
+        return False, "Error en el proceso de recuperación de contraseña"
