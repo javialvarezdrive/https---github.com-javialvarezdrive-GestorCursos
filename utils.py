@@ -30,45 +30,34 @@ def init_session_state_supabase():
         st.session_state['agent_name'] = None
     if 'session_id' not in st.session_state:
         st.session_state['session_id'] = str(int(time.time()))
-    if 'supabase_session_data' not in st.session_state:
-        st.session_state['supabase_session_data'] = None
         
-    # Intentar restaurar la sesión desde localStorage al inicio
+    # Intentar verificar si hay una sesión activa de Supabase
+    # Supabase automáticamente guarda la sesión en localStorage
     if not st.session_state['authenticated']:
-        # Este componente intentará cargar datos de sesión del navegador
-        # Nota: No usar 'key' en el componente HTML para evitar el error
-        st.components.v1.html("""
-        <script>
-            // Función para obtener datos del localStorage
-            function getSavedSession() {
-                try {
-                    // Intentar obtener los datos de sesión guardados
-                    const sessionData = localStorage.getItem('supabase_session');
-                    if (sessionData) {
-                        console.log('Sesión encontrada en localStorage');
-                        // Enviar al componente Streamlit
-                        window.parent.postMessage({
-                            type: "streamlit:setComponentValue",
-                            value: sessionData
-                        }, "*");
-                    } else {
-                        console.log('No se encontró sesión guardada');
-                    }
-                } catch (e) {
-                    console.error('Error al intentar restaurar sesión:', e);
-                }
-            }
-            
-            // Ejecutar cuando el DOM esté listo
-            if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                setTimeout(getSavedSession, 500);
-            } else {
-                document.addEventListener('DOMContentLoaded', function() {
-                    setTimeout(getSavedSession, 500);
-                });
-            }
-        </script>
-        """, height=0)
+        try:
+            # Intentar recuperar la sesión actual
+            user = config.supabase.auth.get_user()
+            if user:
+                st.session_state['authenticated'] = True
+                st.session_state['user_data'] = user.user
+                
+                # Intentar obtener el NIP asociado al email del usuario
+                try:
+                    email = user.user.email
+                    agent_response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("email", email).execute()
+                    if agent_response.data:
+                        nip = agent_response.data[0].get('nip')
+                        st.session_state['user_nip'] = nip
+                        
+                        # Obtener nombre del agente
+                        agent_name = get_agent_name(nip)
+                        if agent_name and agent_name != "Agente no encontrado" and agent_name != "Error":
+                            st.session_state['agent_name'] = agent_name
+                except Exception as e:
+                    st.warning("Sesión recuperada pero no se pudo obtener información del agente")
+        except:
+            # No hay sesión activa o ha expirado
+            pass
 
 def set_supabase_session_from_state():
     """
@@ -215,7 +204,7 @@ def clear_supabase_session():
     }
     </script>
     """
-    st.components.v1.html(js, height=0, key="clear_local_storage")
+    st.components.v1.html(js, height=0)
     
     # Limpiar variables de sesión
     st.session_state['supabase_session'] = None
@@ -235,101 +224,66 @@ def check_supabase_auth():
     # Inicializar variables de session_state si no existen
     init_session_state_supabase()
     
-    # Si ya está autenticado, verificar que la sesión siga siendo válida
-    if st.session_state.get('authenticated') and st.session_state.get('user_nip'):
-        # Verificar que el cliente de Supabase tenga la sesión establecida
-        if not set_supabase_session_from_state():
-            # Si no se pudo establecer la sesión, limpiar la sesión
-            clear_supabase_session()
-            return False
-        
-        # Intentar obtener el usuario actual para verificar
+    # Si ya está autenticado en session_state, verificar que la sesión siga siendo válida
+    if st.session_state.get('authenticated'):
         try:
-            # Usar la API de Supabase para verificar si sigue autenticado
+            # Usar la API nativa de Supabase para verificar si sigue autenticado
             user = config.supabase.auth.get_user()
             if user:
                 # La sesión sigue siendo válida
-                # Asegurarse de que el NIP sigue asociado
-                nip = st.session_state.get('user_nip')
-                if nip:
-                    # Todo está en orden
-                    return True
-                else:
-                    # No hay NIP asociado, algo está mal
-                    clear_supabase_session()
-                    return False
+                # Verificar que tengamos el NIP
+                if not st.session_state.get('user_nip'):
+                    # Si no tenemos el NIP, intentar obtenerlo del email
+                    try:
+                        email = user.user.email
+                        agent_response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("email", email).execute()
+                        if agent_response.data:
+                            st.session_state['user_nip'] = agent_response.data[0].get('nip')
+                    except:
+                        pass
+                
+                # Si todo está bien, mantener la sesión
+                return True
             else:
                 # La sesión ya no es válida
                 clear_supabase_session()
                 return False
         except Exception as e:
             # Error al verificar, limpiar sesión
-            st.warning(f"La sesión ha expirado. Se requerirá inicio de sesión.")
+            st.warning("La sesión ha expirado. Se requerirá iniciar sesión nuevamente.")
             clear_supabase_session()
             return False
     
-    # No hay sesión activa en session_state, intentar restaurar desde localStorage
-    # Este componente captura la data de sesión enviada desde el navegador
-    session_data = st.session_state.get('supabase_session_data')
-    if session_data and isinstance(session_data, str):
-        try:
-            # Procesar los datos de sesión
-            import json
-            saved_session = json.loads(session_data)
+    # Si no hay sesión en session_state, Supabase intentará automáticamente 
+    # restaurar desde localStorage. Probemos directamente:
+    try:
+        user = config.supabase.auth.get_user()
+        if user:
+            # Hay una sesión activa que se restauró automáticamente
+            st.session_state['authenticated'] = True
+            st.session_state['user_data'] = user.user
             
-            # Verificar que hay tokens en los datos
-            if saved_session.get('access_token') and saved_session.get('refresh_token'):
-                try:
-                    # Intentar establecer la sesión
-                    config.supabase.auth.set_session(saved_session['access_token'], saved_session['refresh_token'])
+            # Intentar obtener el NIP asociado al email
+            try:
+                email = user.user.email
+                agent_response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("email", email).execute()
+                if agent_response.data:
+                    nip = agent_response.data[0].get('nip')
+                    st.session_state['user_nip'] = nip
                     
-                    # Verificar si funcionó obteniendo el usuario actual
-                    user = config.supabase.auth.get_user()
-                    if user:
-                        # Sesión restaurada con éxito
-                        st.session_state['authenticated'] = True
-                        st.session_state['supabase_session'] = saved_session
-                        
-                        # Recuperar NIP del usuario si está disponible
-                        nip = None
-                        user_data = saved_session.get('user', {})
-                        if user_data.get('nip'):
-                            nip = user_data['nip']
-                        else:
-                            # Intentar buscar el NIP por email
-                            try:
-                                email = user.user.email
-                                agent_response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("email", email).execute()
-                                if agent_response.data:
-                                    nip = agent_response.data[0].get('nip')
-                            except:
-                                pass
-                                
-                        st.session_state['user_nip'] = nip
-                        st.session_state['user_data'] = user.user
-                        
-                        # Intentar obtener el nombre del agente
-                        if nip:
-                            try:
-                                agent_name = get_agent_name(nip)
-                                if agent_name and agent_name != "Agente no encontrado" and agent_name != "Error":
-                                    st.session_state['agent_name'] = agent_name
-                            except:
-                                pass
-                                
-                        # Limpiar para que no se procese de nuevo
-                        st.session_state['supabase_session_data'] = None
-                        
-                        return True
-                except Exception as e:
-                    # Error al restaurar sesión
-                    st.warning("No se pudo restaurar la sesión guardada.")
-                    
-        except Exception as e:
-            # Error al procesar los datos de sesión
-            st.warning("Error al procesar los datos de sesión guardados.")
+                    # Obtener nombre del agente
+                    agent_name = get_agent_name(nip)
+                    if agent_name and agent_name != "Agente no encontrado" and agent_name != "Error":
+                        st.session_state['agent_name'] = agent_name
+            except:
+                pass
+                
+            return True
+    except:
+        # No hay sesión activa o ha expirado
+        pass
     
-    # No hay sesión activa y no se pudo restaurar
+    # No hay sesión activa
     return False
 
 def save_credentials(email, password, remember=False):
