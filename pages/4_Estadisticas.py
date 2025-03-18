@@ -9,6 +9,9 @@ import utils
 # Check authentication
 utils.check_authentication()
 
+# Configura el sidebar y el botón de cerrar sesión
+utils.setup_sidebar()
+
 # Page title
 st.title("📊 Estadísticas")
 

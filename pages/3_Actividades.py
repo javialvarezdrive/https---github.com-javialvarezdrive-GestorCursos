@@ -7,6 +7,9 @@ import utils
 # Check authentication
 utils.check_authentication()
 
+# Configura el sidebar y el botón de cerrar sesión
+utils.setup_sidebar()
+
 # Inicialización del estado de la sesión para confirmaciones de eliminación
 if "activity_confirm_delete" not in st.session_state:
     st.session_state.activity_confirm_delete = False
