@@ -153,19 +153,27 @@ def save_session_to_cookie():
         js = f"""
         <script>
         try {{
-            // Guardar en localStorage
+            // Guardar en localStorage - manera más directa
+            localStorage.setItem('vigo_police_session', '{session_token}');
+            
+            // Guardar en localStorage (respaldo)
             localStorage.setItem('auth_token', '{session_token}');
             
             // Establecer cookie con 30 días de duración
-            const days = 30;
             const date = new Date();
-            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            date.setTime(date.getTime() + (30 * 24 * 60 * 60 * 1000));
             const expires = "; expires=" + date.toUTCString();
-            document.cookie = "{COOKIE_NAME}=" + '{session_token}' + expires + "; path=/; SameSite=Strict";
+            document.cookie = "vigo_police_session={session_token}" + expires + "; path=/; SameSite=Strict";
             
-            console.log('Sesión guardada en localStorage y cookies');
+            // Más simple: guardar el NIP directamente para persistencia
+            localStorage.setItem('user_nip', '{st.session_state.get("user_nip")}');
+            sessionStorage.setItem('user_nip', '{st.session_state.get("user_nip")}');
+            
+            console.log('Sesión guardada en localStorage, sessionStorage y cookies');
+            alert("Sesión guardada correctamente. Se mantendrá activa cuando vuelvas.");
         }} catch (e) {{
             console.error('Error guardando sesión:', e);
+            alert("Error al guardar la sesión: " + e.message);
         }}
         </script>
         """
@@ -312,13 +320,17 @@ def clear_session_cookie():
     js = """
     <script>
     try {
-        // Eliminar de localStorage
+        // Eliminar todas las formas de almacenamiento
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('vigo_police_session');
+        localStorage.removeItem('user_nip');
+        sessionStorage.removeItem('user_nip');
         
         // Eliminar cookie estableciendo una fecha pasada
         document.cookie = "vigo_police_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict";
         
-        console.log('Sesión eliminada de localStorage y cookies');
+        console.log('Sesión eliminada de localStorage, sessionStorage y cookies');
+        alert('Sesión cerrada correctamente');
     } catch (e) {
         console.error('Error al eliminar datos de sesión:', e);
     }

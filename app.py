@@ -191,6 +191,7 @@ def main():
         if 'token-input' in st.session_state:
             try:
                 token_data = st.session_state['token-input']
+                st.write(f"Debug: Token recibido desde el navegador: {token_data and 'Sí' or 'No'}")
                 if token_data:
                     # Decodificar el token
                     import json
