@@ -72,6 +72,34 @@ def show_statistics():
         selected_groups = []
         st.sidebar.warning("No se pudieron cargar los grupos")
     
+    # Agents filter - new filter
+    try:
+        all_agents = utils.get_all_agents()
+        if not all_agents.empty:
+            # Get agent names in format NIP - Nombre Apellido
+            agent_options = []
+            for _, agent in all_agents.iterrows():
+                agent_name = f"{agent['nip']} - {agent['nombre']} {agent['apellido1']}"
+                agent_options.append((agent['nip'], agent_name))
+            
+            # Sort by name
+            agent_options.sort(key=lambda x: x[1])
+            
+            agent_nips = [a[0] for a in agent_options]
+            agent_labels = [a[1] for a in agent_options]
+            
+            selected_agents = st.sidebar.multiselect(
+                "Agentes",
+                options=agent_nips,
+                default=[],
+                format_func=lambda nip: next((label for n, label in zip(agent_nips, agent_labels) if n == nip), nip)
+            )
+        else:
+            selected_agents = []
+    except:
+        selected_agents = []
+        st.sidebar.warning("No se pudieron cargar los agentes")
+    
     # Apply filters and load data
     try:
         # Get all activities within date range
@@ -105,6 +133,11 @@ def show_statistics():
         
         if selected_groups:
             agents_df = agents_df[agents_df['grupo'].isin(selected_groups)]
+        
+        # Apply agent filter if specified
+        if selected_agents:
+            # Si se seleccionaron agentes específicos, filtramos solo por ellos
+            agents_df = agents_df[agents_df['nip'].isin(selected_agents)]
         
         # Filter participants to only include agents that match our filters
         agent_nips = agents_df['nip'].tolist()
