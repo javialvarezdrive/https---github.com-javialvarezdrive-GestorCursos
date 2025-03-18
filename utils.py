@@ -1061,3 +1061,118 @@ def reset_password(nip, email):
     except Exception as e:
         st.error(f"Error en el proceso de recuperación: {str(e)}")
         return False, "Error en el proceso de recuperación de contraseña"
+        
+# --- Función para obtener estadísticas dinámicas ---
+def get_agents_activity_stats(start_date=None, end_date=None, curso_id=None, secciones=None, agentes=None):
+    """
+    Obtiene estadísticas de actividad de agentes con filtros dinámicos
+    
+    Parámetros:
+    - start_date: Fecha de inicio (datetime.date)
+    - end_date: Fecha fin (datetime.date)
+    - curso_id: ID del curso (str o None para todos)
+    - secciones: Lista de secciones a incluir (list o None para todas)
+    - agentes: Lista de NIPs de agentes a incluir (list o None para todos)
+    
+    Retorna:
+    - DataFrame con las estadísticas
+    """
+    try:
+        # Construir la consulta SQL base
+        query = f"""
+        WITH agent_activities AS (
+            SELECT 
+                a.nip, 
+                COUNT(DISTINCT p.activity_id) as total_actividades
+            FROM 
+                {config.AGENTS_TABLE} a
+            LEFT JOIN 
+                {config.PARTICIPANTS_TABLE} p ON a.nip = p.agent_nip
+            LEFT JOIN 
+                {config.ACTIVITIES_TABLE} act ON p.activity_id = act.id
+            WHERE 
+                1=1
+        """
+        
+        # Parámetros para la consulta
+        params = {}
+        
+        # Añadir filtros según los parámetros proporcionados
+        if start_date:
+            query += " AND act.fecha >= :start_date"
+            params['start_date'] = start_date.strftime("%Y-%m-%d")
+        
+        if end_date:
+            query += " AND act.fecha <= :end_date"
+            params['end_date'] = end_date.strftime("%Y-%m-%d")
+        
+        if curso_id:
+            query += " AND act.curso_id = :curso_id"
+            params['curso_id'] = curso_id
+        
+        if secciones and len(secciones) > 0:
+            placeholders = [f":seccion_{i}" for i in range(len(secciones))]
+            query += f" AND a.seccion IN ({','.join(placeholders)})"
+            for i, seccion in enumerate(secciones):
+                params[f'seccion_{i}'] = seccion
+        
+        if agentes and len(agentes) > 0:
+            placeholders = [f":agente_{i}" for i in range(len(agentes))]
+            query += f" AND a.nip IN ({','.join(placeholders)})"
+            for i, agente in enumerate(agentes):
+                params[f'agente_{i}'] = agente
+        
+        # Completar la consulta con el GROUP BY
+        query += """
+            GROUP BY 
+                a.nip
+        )
+        SELECT 
+            a.nip, 
+            a.nombre, 
+            a.apellido1 || ' ' || COALESCE(a.apellido2, '') as apellidos, 
+            a.seccion,
+            COALESCE(aa.total_actividades, 0) as total_actividades
+        FROM 
+            {0} a
+        LEFT JOIN 
+            agent_activities aa ON a.nip = aa.nip
+        WHERE 
+            1=1
+        """.format(config.AGENTS_TABLE)
+        
+        # Aplicar filtros adicionales a la consulta principal si es necesario
+        if secciones and len(secciones) > 0:
+            placeholders = [f":seccion_main_{i}" for i in range(len(secciones))]
+            query += f" AND a.seccion IN ({','.join(placeholders)})"
+            for i, seccion in enumerate(secciones):
+                params[f'seccion_main_{i}'] = seccion
+        
+        if agentes and len(agentes) > 0:
+            placeholders = [f":agente_main_{i}" for i in range(len(agentes))]
+            query += f" AND a.nip IN ({','.join(placeholders)})"
+            for i, agente in enumerate(agentes):
+                params[f'agente_main_{i}'] = agente
+        
+        # Ordenar los resultados
+        query += """
+        ORDER BY 
+            total_actividades DESC, apellidos ASC, nombre ASC
+        """
+        
+        # Ejecutar la consulta
+        response = config.supabase.table("dummy").rpc("execute_sql", {"sql_query": query, "params": params}).execute()
+        
+        # Convertir a DataFrame
+        if response.data:
+            df = pd.DataFrame(response.data)
+            # Rellenar valores nulos en total_actividades con 0
+            if 'total_actividades' in df.columns:
+                df['total_actividades'] = df['total_actividades'].fillna(0).astype(int)
+            return df
+        else:
+            return pd.DataFrame(columns=['nip', 'nombre', 'apellidos', 'seccion', 'total_actividades'])
+    
+    except Exception as e:
+        st.error(f"Error al obtener estadísticas: {str(e)}")
+        return pd.DataFrame(columns=['nip', 'nombre', 'apellidos', 'seccion', 'total_actividades'])

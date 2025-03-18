@@ -15,25 +15,29 @@ utils.setup_sidebar()
 # Page title
 st.title("📊 Estadísticas")
 
+# Tabs para diferentes vistas
+tab1, tab2 = st.tabs(["Dashboard General", "Vista Dinámica"])
+
 # Main function
 def show_statistics():
-    # Sidebar filters
-    st.sidebar.header("Filtros")
-    
-    # Date range filter
-    st.sidebar.subheader("Rango de fechas")
-    
-    # Calculate default date ranges (current month)
-    today = datetime.now()
-    start_of_month = datetime(today.year, today.month, 1)
-    
-    # Default start and end dates
-    default_start_date = start_of_month
-    default_end_date = today
-    
-    # Date inputs
-    start_date = st.sidebar.date_input("Fecha inicio", default_start_date)
-    end_date = st.sidebar.date_input("Fecha fin", default_end_date)
+    with tab1:
+        # Sidebar filters
+        st.sidebar.header("Filtros Dashboard")
+        
+        # Date range filter
+        st.sidebar.subheader("Rango de fechas")
+        
+        # Calculate default date ranges (current month)
+        today = datetime.now()
+        start_of_month = datetime(today.year, today.month, 1)
+        
+        # Default start and end dates
+        default_start_date = start_of_month
+        default_end_date = today
+        
+        # Date inputs
+        start_date = st.sidebar.date_input("Fecha inicio", default_start_date, key="dash_start_date")
+        end_date = st.sidebar.date_input("Fecha fin", default_end_date, key="dash_end_date")
     
     # Section filter
     try:
