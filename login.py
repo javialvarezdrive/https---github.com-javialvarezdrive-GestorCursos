@@ -33,7 +33,35 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Initialize session state variables
-utils.init_session_state()
+utils.init_session_state_supabase()
+
+# Additional app state variables
+if 'need_rerun' not in st.session_state:
+    st.session_state.need_rerun = False
+    
+if 'username' not in st.session_state:
+    st.session_state.username = None
+
+if 'password_recovery' not in st.session_state:
+    st.session_state.password_recovery = False
+
+# Login form fields
+if 'form_email' not in st.session_state:
+    st.session_state.form_email = ""
+if 'form_password' not in st.session_state:
+    st.session_state.form_password = ""
+if 'login_error' not in st.session_state:
+    st.session_state.login_error = ""
+if 'remember_me' not in st.session_state:
+    st.session_state.remember_me = False
+
+# Recovery form fields
+if 'recovery_username' not in st.session_state:
+    st.session_state.recovery_username = ""
+if 'recovery_email' not in st.session_state:
+    st.session_state.recovery_email = ""
+if 'recovery_message' not in st.session_state:
+    st.session_state.recovery_message = {"type": "", "text": ""}
 
 # Check authentication status
 is_authenticated = utils.check_supabase_auth()
