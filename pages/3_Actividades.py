@@ -7,6 +7,17 @@ import utils
 # Check authentication
 utils.check_authentication()
 
+# Inicialización del estado de la sesión para confirmaciones de eliminación
+if "activity_confirm_delete" not in st.session_state:
+    st.session_state.activity_confirm_delete = False
+    
+if "activity_to_delete_id" not in st.session_state:
+    st.session_state.activity_to_delete_id = None
+
+# Inicializar datos en el estado de la sesión
+if "activities_df" not in st.session_state:
+    st.session_state.activities_df = utils.get_all_activities()
+
 # Page title
 st.title("🗓️ Gestión de Actividades")
 
@@ -17,8 +28,8 @@ tab1, tab2, tab3, tab4 = st.tabs(["Ver Actividades", "Añadir Actividad", "Asign
 with tab1:
     st.subheader("Lista de Actividades")
     
-    # Get activities data
-    activities_df = utils.get_all_activities()
+    # Usar el DataFrame almacenado en session_state
+    activities_df = st.session_state.activities_df
     
     if not activities_df.empty:
         # Create a display dataframe with additional information
@@ -182,6 +193,9 @@ with tab2:
                             
                             if result.data:
                                 st.success(f"Actividad añadida correctamente para el {fecha.strftime('%d/%m/%Y')} en turno {turno}")
+                                # Actualizar DataFrame en session_state
+                                st.session_state.activities_df = utils.get_all_activities()
+                                st.rerun()
                             else:
                                 st.error("Error al añadir la actividad")
                     except Exception as e:
@@ -191,8 +205,8 @@ with tab2:
 with tab3:
     st.subheader("Asignar Agentes a Actividades")
     
-    # Get activities data
-    activities_df = utils.get_all_activities()
+    # Usar el DataFrame almacenado en session_state
+    activities_df = st.session_state.activities_df
     
     if not activities_df.empty:
         # Create activity options for selection
@@ -300,6 +314,9 @@ with tab3:
                             config.supabase.table(config.PARTICIPANTS_TABLE).insert(participant_data).execute()
                         
                         st.success("Participantes actualizados correctamente")
+                        # Actualizar DataFrame en session_state
+                        st.session_state.activities_df = utils.get_all_activities()
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Error al actualizar participantes: {str(e)}")
             else:
@@ -311,8 +328,8 @@ with tab3:
 with tab4:
     st.subheader("Editar Actividad Existente")
     
-    # Get activities data
-    activities_df = utils.get_all_activities()
+    # Usar el DataFrame almacenado en session_state
+    activities_df = st.session_state.activities_df
     
     if not activities_df.empty:
         # Create activity options for selection (same as in Tab 3)
@@ -350,7 +367,41 @@ with tab4:
             # Get activity details
             activity_data = activities_df[activities_df['id'] == selected_activity_id].iloc[0].to_dict()
             
-            # Create form for editing
+            # Si estamos en modo de confirmación de eliminación
+            if st.session_state.activity_confirm_delete and st.session_state.activity_to_delete_id == selected_activity_id:
+                st.warning(f"¿Estás seguro de que deseas eliminar esta actividad?")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Sí, eliminar"):
+                        try:
+                            # First delete all participants
+                            config.supabase.table(config.PARTICIPANTS_TABLE).delete().eq("activity_id", selected_activity_id).execute()
+                            
+                            # Then delete the activity
+                            result = config.supabase.table(config.ACTIVITIES_TABLE).delete().eq("id", selected_activity_id).execute()
+                            
+                            if result.data:
+                                st.success(f"Actividad eliminada correctamente")
+                                # Limpiar modo de confirmación
+                                st.session_state.activity_confirm_delete = False
+                                st.session_state.activity_to_delete_id = None
+                                # Actualizar DataFrame de actividades
+                                st.session_state.activities_df = utils.get_all_activities()
+                                st.rerun()
+                            else:
+                                st.error("Error al eliminar la actividad")
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                
+                with col2:
+                    if st.button("No, cancelar"):
+                        # Limpiar modo de confirmación
+                        st.session_state.activity_confirm_delete = False
+                        st.session_state.activity_to_delete_id = None
+                        st.rerun()
+            
+            # Si no estamos en modo de confirmación, mostrar el formulario de edición
             with st.form("edit_activity_form"):
                 col1, col2 = st.columns(2)
                 
@@ -443,35 +494,18 @@ with tab4:
                                 
                                 if result.data:
                                     st.success(f"Actividad actualizada correctamente")
+                                    # Actualizar DataFrame en session_state
+                                    st.session_state.activities_df = utils.get_all_activities()
+                                    st.rerun()
                                 else:
                                     st.error("Error al actualizar la actividad")
                         except Exception as e:
                             st.error(f"Error: {str(e)}")
                 
                 if delete_button:
-                    # Delete activity confirmation
-                    st.warning(f"¿Estás seguro de que deseas eliminar esta actividad?")
-                    
-                    # Create confirmation buttons
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        if st.button("Sí, eliminar"):
-                            try:
-                                # First delete all participants
-                                config.supabase.table(config.PARTICIPANTS_TABLE).delete().eq("activity_id", selected_activity_id).execute()
-                                
-                                # Then delete the activity
-                                result = config.supabase.table(config.ACTIVITIES_TABLE).delete().eq("id", selected_activity_id).execute()
-                                
-                                if result.data:
-                                    st.success(f"Actividad eliminada correctamente")
-                                    st.rerun()
-                                else:
-                                    st.error("Error al eliminar la actividad")
-                            except Exception as e:
-                                st.error(f"Error: {str(e)}")
-                    with col2:
-                        if st.button("No, cancelar"):
-                            st.rerun()
+                    # Activar modo de confirmación
+                    st.session_state.activity_confirm_delete = True
+                    st.session_state.activity_to_delete_id = selected_activity_id
+                    st.rerun()
     else:
         st.warning("No hay actividades disponibles para editar.")
