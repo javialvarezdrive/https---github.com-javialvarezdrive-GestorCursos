@@ -195,47 +195,66 @@ def validate_activity(fecha, turno):
     
     return errors
 
-def get_user_by_username(username):
-    """Get user data by username"""
+def get_user_by_nip(nip):
+    """Get user data by NIP (agent ID)"""
     try:
-        response = config.supabase.table(config.USERS_TABLE).select("*").eq("username", username).execute()
+        response = config.supabase.table(config.USERS_TABLE).select("*").eq("agent_nip", nip).execute()
         if response.data:
             return response.data[0]
         return None
     except Exception as e:
         st.error(f"Error al obtener el usuario: {str(e)}")
         return None
+        
+def verify_credentials(nip, password):
+    """Verify user credentials (NIP and password)"""
+    try:
+        user = get_user_by_nip(nip)
+        if not user:
+            return False, "Agente no encontrado"
+            
+        # Verificar la contraseña
+        # En un caso real, deberíamos hashear la contraseña y compararla
+        # Por simplicidad, comparamos directamente
+        if user.get('password') == password:
+            return True, user
+        else:
+            return False, "Contraseña incorrecta"
+    except Exception as e:
+        st.error(f"Error al verificar credenciales: {str(e)}")
+        return False, "Error de autenticación"
 
 def generate_temp_password(length=8):
     """Generate a temporary password"""
     characters = string.ascii_letters + string.digits
     return ''.join(random.choice(characters) for _ in range(length))
 
-def reset_password(username, email):
+def reset_password(nip, email):
     """Reset user password and send email with new password"""
     try:
-        # Check if username exists
-        user = get_user_by_username(username)
-        if not user:
-            return False, "El nombre de usuario no existe"
-        
-        # Verificar que tenga un agente asociado con el mismo email
-        response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("nip", username).execute()
+        # Verificar que existe un agente con ese NIP
+        response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("nip", nip).execute()
         if not response.data:
-            return False, "No se encontró un agente asociado a este usuario"
+            return False, "No se encontró un agente con este NIP"
         
+        # Verificar que el email coincida con el del agente
         agent = response.data[0]
         if agent.get('email') != email:
             return False, "El email no coincide con el registrado para este agente"
+        
+        # Verificar que el agente tiene un usuario en la tabla users
+        user = get_user_by_nip(nip)
+        if not user:
+            return False, "No existe un usuario asociado a este agente"
             
         # Generate new password
         new_password = generate_temp_password()
         
-        # Hash new password
-        hashed_password = '$2b$12$Y5H2PFn.y3LkLn1x4IRY0.dfYD.9rN5ypGqQO/m.QZZOpKTQnXAuK'  # Default hash for 'password'
+        # Hash new password - en un caso real debería hashear la contraseña
+        # Para simplificar, usamos la contraseña en texto plano por ahora
         
         # Update user password in database
-        config.supabase.table(config.USERS_TABLE).update({"password": hashed_password}).eq("username", username).execute()
+        config.supabase.table(config.USERS_TABLE).update({"password": new_password}).eq("agent_nip", nip).execute()
         
         # In a real application, send an email with the new password
         # For now, just return the new password

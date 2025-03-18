@@ -52,38 +52,12 @@ def main():
     # If not authenticated, show login or password recovery
     if not st.session_state.authenticated:
         if not st.session_state.password_recovery:
-            # Set up default credentials
-            credentials = {
-                'usernames': {
-                    'admin': {
-                        'name': 'Administrador',
-                        'password': '$2b$12$Y5H2PFn.y3LkLn1x4IRY0.dfYD.9rN5ypGqQO/m.QZZOpKTQnXAuK'  # Hash for 'password'
-                    }
-                }
-            }
-            
-            # Try to load users from database
-            try:
-                response = config.supabase.table(config.USERS_TABLE).select("*").execute()
-                users_data = response.data
-                
-                if users_data:
-                    # Add database users to credentials
-                    for user in users_data:
-                        if 'username' in user and 'name' in user and 'password' in user:
-                            credentials['usernames'][user['username']] = {
-                                'name': user['name'],
-                                'password': user['password']
-                            }
-            except Exception as e:
-                st.warning(f"Error al cargar usuarios: {str(e)}. Se utilizará el usuario por defecto.")
-            
             # Show login form
             st.subheader("Iniciar Sesión")
             
             # Use session state for form inputs to persist values
-            if 'form_username' not in st.session_state:
-                st.session_state.form_username = ""
+            if 'form_nip' not in st.session_state:
+                st.session_state.form_nip = ""
             if 'form_password' not in st.session_state:
                 st.session_state.form_password = ""
             if 'login_error' not in st.session_state:
@@ -91,31 +65,42 @@ def main():
             
             # Define process login function for form submit button
             def process_login():
-                username = st.session_state.username_input
+                nip = st.session_state.nip_input
                 password = st.session_state.password_input
                 
                 # Store form values in session state for persistence
-                st.session_state.form_username = username
+                st.session_state.form_nip = nip
                 st.session_state.form_password = password
                 
-                # Validate credentials directly
-                if username in credentials['usernames']:
-                    # Para la contraseña hashed almacenada, necesitamos verificarla de otra manera
-                    # por ahora, permitamos el acceso de admin para pruebas
-                    if username == "admin" and password == "password":
-                        st.session_state.authenticated = True
-                        st.session_state.username = username
-                        st.session_state.login_error = ""
-                        # Generate a new session ID when logged in
-                        st.session_state.session_id = str(int(time.time()))
-                    else:
-                        st.session_state.login_error = "Contraseña incorrecta"
+                # Validate credentials using the NIP and password
+                success, result = utils.verify_credentials(nip, password)
+                if success:
+                    # Autenticación exitosa
+                    user = result
+                    st.session_state.authenticated = True
+                    st.session_state.username = nip  # Guardamos el NIP como identificador
+                    st.session_state.user_data = user  # Guardamos todos los datos del usuario
+                    st.session_state.login_error = ""
+                    
+                    # Obtener el nombre del agente para mostrarlo en la interfaz
+                    try:
+                        agent_name = utils.get_agent_name(nip)
+                        if agent_name != "Agente no encontrado" and agent_name != "Error":
+                            st.session_state.agent_name = agent_name
+                        else:
+                            st.session_state.agent_name = f"Agente {nip}"
+                    except:
+                        st.session_state.agent_name = f"Agente {nip}"
+                    
+                    # Generate a new session ID when logged in
+                    st.session_state.session_id = str(int(time.time()))
                 else:
-                    st.session_state.login_error = "Usuario no encontrado"
+                    # Error de autenticación
+                    st.session_state.login_error = result
             
             # Manually build a login form - no on_change callbacks in form
             with st.form("login_form", clear_on_submit=False):
-                st.text_input("Usuario", key="username_input", value=st.session_state.form_username)
+                st.text_input("NIP (Número de Identificación Personal)", key="nip_input", value=st.session_state.form_nip)
                 st.text_input("Contraseña", type="password", key="password_input", value=st.session_state.form_password)
                 submit_button = st.form_submit_button("Acceder", on_click=process_login)
             
@@ -194,7 +179,11 @@ def main():
     
     else:
         # Show the main page after authentication
-        st.write(f"## Bienvenido, {st.session_state.username}")
+        # Usamos el nombre del agente para la bienvenida si está disponible
+        if 'agent_name' in st.session_state:
+            st.write(f"## Bienvenido, {st.session_state.agent_name}")
+        else:
+            st.write(f"## Bienvenido, Agente {st.session_state.username}")
         st.write("## Sistema de Gestión de Agentes, Cursos y Actividades")
         
         # Show information about the app
