@@ -22,7 +22,7 @@ if "activities_df" not in st.session_state:
 st.title("🗓️ Gestión de Actividades")
 
 # Create tabs
-tab1, tab2, tab3, tab4 = st.tabs(["Ver Actividades", "Añadir Actividad", "Asignar Agentes", "Editar Actividad"])
+tab1, tab2, tab3 = st.tabs(["Ver Actividades", "Añadir Actividad", "Editar Actividad"])
 
 # Tab 1: View Activities
 with tab1:
@@ -32,17 +32,99 @@ with tab1:
     activities_df = st.session_state.activities_df
     
     if not activities_df.empty:
+        # Obtener listas de filtros posibles
+        cursos = []
+        monitores = []
+        secciones = []
+        all_participants = []
+        
+        # Recopilar datos para filtros
+        for _, activity in activities_df.iterrows():
+            # Obtener nombre del curso
+            try:
+                if activity['curso_id']:
+                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre", "seccion").eq("id", activity['curso_id']).execute()
+                    if curso_response.data:
+                        curso_info = curso_response.data[0]
+                        curso_nombre = curso_info['nombre']
+                        seccion = curso_info.get('seccion', 'Sin sección')
+                        if curso_nombre and curso_nombre not in cursos:
+                            cursos.append(curso_nombre)
+                        if seccion and seccion not in secciones:
+                            secciones.append(seccion)
+            except:
+                pass
+                
+            # Obtener monitor
+            try:
+                if activity['monitor_nip']:
+                    monitor_name = utils.get_agent_name(activity['monitor_nip'])
+                    if monitor_name and monitor_name not in monitores:
+                        monitores.append(monitor_name)
+            except:
+                pass
+                
+            # Obtener participantes
+            try:
+                participants_response = config.supabase.table(config.PARTICIPANTS_TABLE).select("agent_nip").eq("activity_id", activity['id']).execute()
+                if participants_response.data:
+                    for p in participants_response.data:
+                        participant_name = utils.get_agent_name(p['agent_nip'])
+                        if participant_name and participant_name not in all_participants:
+                            all_participants.append(participant_name)
+            except:
+                pass
+        
+        # Ordenar las listas para los filtros
+        cursos.sort()
+        monitores.sort()
+        secciones.sort()
+        all_participants.sort()
+        
+        # Filtros
+        st.write("### Filtros")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Filtro de rango de fechas
+            min_date = datetime.strptime(min(activities_df['fecha']), "%Y-%m-%d") if 'fecha' in activities_df.columns and not activities_df.empty else datetime.now()
+            max_date = datetime.strptime(max(activities_df['fecha']), "%Y-%m-%d") if 'fecha' in activities_df.columns and not activities_df.empty else datetime.now()
+            
+            fecha_inicio = st.date_input("Fecha inicio", min_date)
+            fecha_fin = st.date_input("Fecha fin", max_date)
+            
+            # Filtro de cursos
+            filtro_curso = st.multiselect("Filtrar por curso", ["Todos"] + cursos, default="Todos")
+        
+        with col2:
+            # Filtro de monitor
+            filtro_monitor = st.multiselect("Filtrar por monitor", ["Todos"] + monitores, default="Todos")
+            
+            # Filtro de sección
+            filtro_seccion = st.multiselect("Filtrar por sección", ["Todas"] + secciones, default="Todas")
+            
+            # Filtro de participante
+            filtro_participante = st.multiselect("Filtrar por participante", ["Todos"] + all_participants, default="Todos")
+        
         # Create a display dataframe with additional information
         display_df = pd.DataFrame()
+        filtered_count = 0
         
         # Process each activity to get full information
         for idx, activity in activities_df.iterrows():
-            # Get course name
+            # Get course name and section
             try:
-                curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
-                curso_nombre = curso_response.data[0]['nombre'] if curso_response.data else "Sin curso"
+                curso_nombre = "Sin curso"
+                seccion = "Sin sección"
+                if activity['curso_id']:
+                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre", "seccion").eq("id", activity['curso_id']).execute()
+                    if curso_response.data:
+                        curso_info = curso_response.data[0]
+                        curso_nombre = curso_info['nombre']
+                        seccion = curso_info.get('seccion', 'Sin sección')
             except:
                 curso_nombre = "Error"
+                seccion = "Error"
             
             # Get monitor name
             try:
@@ -55,8 +137,8 @@ with tab1:
                 participants_response = config.supabase.table(config.PARTICIPANTS_TABLE).select("agent_nip").eq("activity_id", activity['id']).execute()
                 participant_nips = [p['agent_nip'] for p in participants_response.data] if participants_response.data else []
                 
+                participant_names = []
                 if participant_nips:
-                    participant_names = []
                     for nip in participant_nips:
                         participant_names.append(utils.get_agent_name(nip))
                     participants_str = ", ".join(participant_names)
@@ -64,28 +146,87 @@ with tab1:
                     participants_str = "Sin participantes"
             except:
                 participants_str = "Error"
+                participant_names = []
             
             # Format date
             fecha_formatted = utils.format_date(activity['fecha'])
+            fecha_obj = datetime.strptime(activity['fecha'], "%Y-%m-%d").date()
             
-            # Add to display dataframe
-            display_df = pd.concat([display_df, pd.DataFrame({
-                'ID': [activity['id']],
-                'Fecha': [fecha_formatted],
-                'Turno': [activity['turno']],
-                'Curso': [curso_nombre],
-                'Monitor': [monitor_name],
-                'Participantes': [participants_str]
-            })], ignore_index=True)
+            # Aplicar filtros
+            pasa_filtro = True
+            
+            # Filtro de fechas
+            if fecha_obj < fecha_inicio or fecha_obj > fecha_fin:
+                pasa_filtro = False
+            
+            # Filtro de curso
+            if "Todos" not in filtro_curso and curso_nombre not in filtro_curso:
+                pasa_filtro = False
+                
+            # Filtro de monitor
+            if "Todos" not in filtro_monitor and monitor_name not in filtro_monitor:
+                pasa_filtro = False
+                
+            # Filtro de sección
+            if "Todas" not in filtro_seccion and seccion not in filtro_seccion:
+                pasa_filtro = False
+                
+            # Filtro de participante
+            if "Todos" not in filtro_participante:
+                participante_encontrado = False
+                for participante in participant_names:
+                    if participante in filtro_participante:
+                        participante_encontrado = True
+                        break
+                if not participante_encontrado:
+                    pasa_filtro = False
+            
+            if pasa_filtro:
+                filtered_count += 1
+                # Add to display dataframe
+                display_df = pd.concat([display_df, pd.DataFrame({
+                    'Fecha': [fecha_formatted],
+                    'Turno': [activity['turno']],
+                    'Curso': [curso_nombre],
+                    'Sección': [seccion],
+                    'Monitor': [monitor_name],
+                    'Participantes': [participants_str]
+                })], ignore_index=True)
         
-        # Display the dataframe
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True
-        )
-        
-        st.info(f"Total de actividades: {len(display_df)}")
+        # Visualización de participantes más clara
+        if not display_df.empty:
+            # Display the dataframe
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Mostrar actividades seleccionadas para ver detalles
+            st.write("### Detalles de participantes")
+            if len(display_df) > 0:
+                # Usar el índice porque ya no tenemos IDs visibles
+                selected_idx = st.selectbox("Seleccionar actividad para ver detalles de participantes", 
+                                         range(len(display_df)),
+                                         format_func=lambda i: f"{display_df.iloc[i]['Fecha']} - {display_df.iloc[i]['Turno']} - {display_df.iloc[i]['Curso']}")
+                
+                if selected_idx is not None:
+                    st.write(f"**Participantes de la actividad:**")
+                    participants_str = display_df.iloc[selected_idx]['Participantes']
+                    
+                    if participants_str != "Sin participantes" and participants_str != "Error":
+                        participant_list = participants_str.split(", ")
+                        cols = st.columns(min(3, len(participant_list)))
+                        
+                        for i, participant in enumerate(participant_list):
+                            with cols[i % 3]:
+                                st.markdown(f"**{i+1}.** {participant}")
+                    else:
+                        st.info("Esta actividad no tiene participantes asignados.")
+            
+            st.info(f"Mostrando {len(display_df)} de {len(activities_df)} actividades (filtradas: {filtered_count})")
+        else:
+            st.warning("No hay actividades que coincidan con los filtros seleccionados.")
     else:
         st.warning("No hay actividades disponibles en la base de datos.")
 
@@ -317,8 +458,8 @@ with tab3:
     else:
         st.warning("No hay actividades disponibles para asignar agentes.")
 
-# Tab 4: Edit Activity
-with tab4:
+# Tab 3: Edit Activity
+with tab3:
     st.subheader("Editar Actividad Existente")
     
     # Usar el DataFrame almacenado en session_state
