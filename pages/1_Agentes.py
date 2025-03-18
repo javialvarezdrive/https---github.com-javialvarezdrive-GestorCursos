@@ -48,27 +48,104 @@ elif st.session_state.active_tab == "Editar Agente":
 with tab1:
     st.subheader("Lista de Agentes")
     
-    # Search functionality
-    search_query = st.text_input("Buscar agente (NIP, nombre, apellidos...)", "")
-    
     # Usar el DataFrame almacenado en session_state
     agents_df = st.session_state.agents_df
     
     if not agents_df.empty:
-        # Apply search filter if provided
+        # Extraer secciones y grupos únicos disponibles para filtrar
+        secciones_disponibles = agents_df['seccion'].dropna().unique().tolist()
+        secciones_disponibles.sort()
+        
+        grupos_disponibles = agents_df['grupo'].dropna().unique().tolist()
+        grupos_disponibles.sort()
+        
+        # Inicializar key para resetear filtros
+        if "reset_filters" not in st.session_state:
+            st.session_state.reset_filters = False
+        
+        # Crear filtros en un expander
+        with st.expander("Filtros avanzados", expanded=True):
+            # Botón para limpiar filtros
+            col_btn, _ = st.columns([1, 3])
+            with col_btn:
+                if st.button("🔄 Limpiar filtros", key="clean_filters"):
+                    st.session_state.reset_filters = True
+                    st.rerun()
+            
+            # Columnas para los filtros
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Valores predeterminados para los multiselect
+                default_secciones = [] if st.session_state.reset_filters else st.session_state.get("filtro_secciones", [])
+                
+                # Multiselect para filtrar por sección
+                filtro_secciones = st.multiselect(
+                    "Filtrar por sección", 
+                    ["Todas"] + secciones_disponibles, 
+                    default=default_secciones,
+                    key="filtro_secciones"
+                )
+            
+            with col2:
+                # Valores predeterminados para los multiselect
+                default_grupos = [] if st.session_state.reset_filters else st.session_state.get("filtro_grupos", [])
+                
+                # Multiselect para filtrar por grupo
+                filtro_grupos = st.multiselect(
+                    "Filtrar por grupo", 
+                    ["Todos"] + grupos_disponibles, 
+                    default=default_grupos,
+                    key="filtro_grupos"
+                )
+                
+            # Resetear el estado después de aplicar
+            if st.session_state.reset_filters:
+                st.session_state.reset_filters = False
+        
+        # Search functionality with AJAX-like behavior
+        search_query = st.text_input(
+            "Buscar agente por NIP, nombre, apellidos, email, teléfono...",
+            placeholder="El filtro se aplica al escribir",
+            key="agent_search",
+            # Limpiar el campo de búsqueda si se ha pulsado el botón de limpiar filtros
+            value="" if st.session_state.reset_filters else st.session_state.get("agent_search", "")
+        )
+        
+        # Aplicar filtros y rastrear qué filtros están activos
+        filtered_df = agents_df.copy()
+        filtros_activos = []
+        
+        # Filtrar por secciones seleccionadas
+        if "Todas" not in filtro_secciones and filtro_secciones:
+            filtered_df = filtered_df[filtered_df['seccion'].isin(filtro_secciones)]
+            filtros_activos.append(f"Sección: {', '.join(filtro_secciones)}")
+        
+        # Filtrar por grupos seleccionados
+        if "Todos" not in filtro_grupos and filtro_grupos:
+            filtered_df = filtered_df[filtered_df['grupo'].isin(filtro_grupos)]
+            filtros_activos.append(f"Grupo: {', '.join(filtro_grupos)}")
+        
+        # Apply search filter if provided (AJAX-like instant search)
         if search_query:
             search_query = search_query.lower()
-            filtered_df = agents_df[
-                agents_df['nip'].astype(str).str.contains(search_query) |
-                agents_df['nombre'].str.lower().str.contains(search_query) |
-                agents_df['apellido1'].str.lower().str.contains(search_query) |
-                agents_df['apellido2'].str.lower().str.contains(search_query) |
-                agents_df['email'].str.lower().str.contains(search_query) |
-                agents_df['seccion'].str.lower().str.contains(search_query) |
-                agents_df['grupo'].str.lower().str.contains(search_query)
-            ]
-        else:
-            filtered_df = agents_df
+            # Usar una máscara para la búsqueda para ser más eficiente
+            search_mask = (
+                filtered_df['nip'].astype(str).str.contains(search_query) |
+                filtered_df['nombre'].str.lower().str.contains(search_query) |
+                filtered_df['apellido1'].str.lower().str.contains(search_query) |
+                filtered_df['apellido2'].str.lower().str.contains(search_query) |
+                filtered_df['email'].str.lower().str.contains(search_query) |
+                filtered_df['telefono'].astype(str).str.contains(search_query) |
+                filtered_df['seccion'].str.lower().str.contains(search_query) |
+                filtered_df['grupo'].str.lower().str.contains(search_query)
+            )
+            filtered_df = filtered_df[search_mask]
+            filtros_activos.append(f"Término de búsqueda: '{search_query}'")
+            
+        # Mostrar resumen de filtros activos si hay alguno
+        if filtros_activos:
+            st.caption("**Filtros aplicados:** " + " | ".join(filtros_activos))
         
         # Format boolean columns
         display_df = filtered_df.copy()
@@ -107,7 +184,11 @@ with tab1:
             hide_index=True
         )
         
-        st.info(f"Total de agentes: {len(filtered_df)}")
+        # Mostrar información sobre el total de agentes y filtros aplicados
+        if len(filtered_df) == len(agents_df):
+            st.info(f"Mostrando todos los agentes: {len(filtered_df)}")
+        else:
+            st.info(f"Mostrando {len(filtered_df)} de {len(agents_df)} agentes (filtrados por búsqueda o criterios)")
     else:
         st.warning("No hay agentes disponibles en la base de datos.")
 
