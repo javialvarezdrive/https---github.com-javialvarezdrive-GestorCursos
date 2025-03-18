@@ -36,14 +36,32 @@ def set_supabase_session_from_state():
     """
     if st.session_state.get('supabase_session'):
         try:
-            # Extracting required parameters for set_session
+            # Obtener la sesión almacenada
             session_data = st.session_state['supabase_session']
-            access_token = session_data.get('access_token', '')
-            refresh_token = session_data.get('refresh_token', '')
             
-            # Intentar restablecer la sesión en el cliente de Supabase con los tokens explícitos
-            config.supabase.auth.set_session(access_token, refresh_token)
-            return True
+            # Extraer los tokens de la sesión
+            access_token = None
+            refresh_token = None
+            
+            # Verificar si es un objeto Session de Supabase o nuestro formato anterior
+            if hasattr(session_data, 'access_token'):
+                # Es un objeto Session de Supabase
+                access_token = session_data.access_token
+                refresh_token = session_data.refresh_token
+            elif isinstance(session_data, dict):
+                # Es nuestro formato anterior (diccionario)
+                access_token = session_data.get('access_token', '')
+                refresh_token = session_data.get('refresh_token', '')
+            
+            if access_token and refresh_token:
+                # Intentar restablecer la sesión en el cliente de Supabase
+                config.supabase.auth.set_session(access_token, refresh_token)
+                return True
+            else:
+                st.warning("Tokens de sesión no encontrados o inválidos")
+                clear_supabase_session()
+                return False
+                
         except Exception as e:
             # Si hay algún error (token expirado, etc.), limpiar la sesión
             st.warning(f"La sesión ha expirado: {str(e)}")
@@ -51,51 +69,62 @@ def set_supabase_session_from_state():
             return False
     return False
 
-def sign_in_with_nip(nip, password):
+def find_agent_by_nip(nip):
     """
-    Inicia sesión con NIP y contraseña usando la API de Supabase
-    
-    En lugar de usar email/password estándar, usamos una tabla personalizada
-    para la autenticación con NIP (ID del agente)
+    Busca un agente por su NIP y devuelve sus datos
     """
     try:
-        # Verificar credenciales contra tabla users personalizada
-        user = get_user_by_nip(nip)
-        if not user:
+        response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("nip", nip).execute()
+        if response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        st.error(f"Error al buscar el agente: {str(e)}")
+        return None
+
+def get_agent_email_by_nip(nip):
+    """
+    Obtiene el email de un agente por su NIP
+    """
+    agent = find_agent_by_nip(nip)
+    if agent and agent.get('email'):
+        return agent.get('email')
+    return None
+
+def sign_in_with_nip(nip, password):
+    """
+    Inicia sesión con NIP y contraseña usando la API nativa de Supabase
+    
+    Busca el email asociado al NIP del agente y luego usa auth.sign_in_with_password
+    """
+    try:
+        # 1. Buscar el email asociado al NIP
+        email = get_agent_email_by_nip(nip)
+        if not email:
             return False, "Agente no encontrado"
+        
+        # 2. Usar la autenticación nativa de Supabase con email/password
+        try:
+            response = config.supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
             
-        # Verificar la contraseña
-        if user.get('password') == password:
-            # Crear una sesión de Supabase usando el sistema de autorización personalizado
-            # Esta sesión se almacena en session_state
-            import time
-            session_data = {
-                'access_token': f'custom_token_{nip}_{int(time.time())}',
-                'token_type': 'bearer',
-                'expires_in': 3600,
-                'refresh_token': f'refresh_{nip}_{int(time.time())}',
-                'user': {
-                    'id': nip,
-                    'app_metadata': {
-                        'provider': 'custom',
-                        'providers': ['custom']
-                    },
-                    'user_metadata': {
-                        'nip': nip,
-                        'name': get_agent_name(nip)
-                    },
-                    'aud': 'authenticated',
-                    'role': 'authenticated'
-                }
-            }
-            
-            # Guardar la sesión en session_state
-            st.session_state['supabase_session'] = session_data
+            # 3. Guardar la sesión en session_state
+            st.session_state['supabase_session'] = response.session
             st.session_state['authenticated'] = True
             st.session_state['user_nip'] = nip
-            st.session_state['user_data'] = user
             
-            # Obtener nombre del agente
+            # Almacenar datos del usuario en user_data
+            user_metadata = response.user.user_metadata if hasattr(response.user, 'user_metadata') else {}
+            st.session_state['user_data'] = {
+                'id': response.user.id,
+                'email': response.user.email,
+                'nip': nip,
+                'metadata': user_metadata
+            }
+            
+            # 4. Obtener nombre del agente
             try:
                 agent_name = get_agent_name(nip)
                 if agent_name and agent_name != "Agente no encontrado" and agent_name != "Error":
@@ -106,13 +135,20 @@ def sign_in_with_nip(nip, password):
                 st.session_state.agent_name = f"Agente {nip}"
                 st.error(f"Error al obtener el nombre del agente: {str(e)}")
             
-            # Generar un nuevo ID de sesión
+            # 5. Generar un nuevo ID de sesión
             import time
             st.session_state.session_id = str(int(time.time()))
             
-            return True, user
-        else:
-            return False, "Contraseña incorrecta"
+            return True, st.session_state['user_data']
+            
+        except Exception as auth_error:
+            error_message = str(auth_error)
+            if "Invalid login credentials" in error_message:
+                return False, "Contraseña incorrecta"
+            else:
+                st.error(f"Error de autenticación con Supabase: {error_message}")
+                return False, f"Error de autenticación: {error_message}"
+            
     except Exception as e:
         st.error(f"Error al verificar credenciales: {str(e)}")
         return False, "Error de autenticación"
@@ -149,21 +185,34 @@ def check_supabase_auth():
     if st.session_state.get('authenticated') and st.session_state.get('user_nip'):
         # Verificar que el cliente de Supabase tenga la sesión establecida
         if not set_supabase_session_from_state():
-            # Si no se pudo establecer la sesión, verificar con la tabla users
-            try:
-                user = get_user_by_nip(st.session_state.get('user_nip'))
-                if user:
-                    # La sesión sigue siendo válida
+            # Si no se pudo establecer la sesión, limpiar la sesión
+            clear_supabase_session()
+            return False
+        
+        # Intentar obtener el usuario actual para verificar
+        try:
+            # Usar la API de Supabase para verificar si sigue autenticado
+            user = config.supabase.auth.get_user()
+            if user:
+                # La sesión sigue siendo válida
+                # Asegurarse de que el NIP sigue asociado
+                nip = st.session_state.get('user_nip')
+                if nip:
+                    # Todo está en orden
                     return True
                 else:
-                    # La sesión ya no es válida
+                    # No hay NIP asociado, algo está mal
                     clear_supabase_session()
                     return False
-            except:
-                # Error al verificar, limpiar sesión
+            else:
+                # La sesión ya no es válida
                 clear_supabase_session()
                 return False
-        return True
+        except Exception as e:
+            # Error al verificar, limpiar sesión
+            st.error(f"Error al verificar autenticación: {str(e)}")
+            clear_supabase_session()
+            return False
     
     # No hay sesión activa
     return False
