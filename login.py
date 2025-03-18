@@ -115,4 +115,4 @@ if not is_authenticated:
 
 else:
     # If authenticated, redirect to activities page
-    st.switch_page("pages/3_Actividades.py")
+    st.switch_page("pages/1_Actividades.py")
