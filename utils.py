@@ -36,8 +36,13 @@ def set_supabase_session_from_state():
     """
     if st.session_state.get('supabase_session'):
         try:
-            # Intentar restablecer la sesión en el cliente de Supabase
-            config.supabase.auth.set_session(st.session_state['supabase_session'])
+            # Extracting required parameters for set_session
+            session_data = st.session_state['supabase_session']
+            access_token = session_data.get('access_token', '')
+            refresh_token = session_data.get('refresh_token', '')
+            
+            # Intentar restablecer la sesión en el cliente de Supabase con los tokens explícitos
+            config.supabase.auth.set_session(access_token, refresh_token)
             return True
         except Exception as e:
             # Si hay algún error (token expirado, etc.), limpiar la sesión

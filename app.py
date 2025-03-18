@@ -19,6 +19,10 @@ def init_session_state():
     # Initialize Supabase session variables
     utils.init_session_state_supabase()
     
+    # Variable para recargar la página después de callbacks
+    if 'need_rerun' not in st.session_state:
+        st.session_state.need_rerun = False
+    
     # Additional app state variables
     if 'username' not in st.session_state:
         st.session_state.username = None
@@ -49,6 +53,11 @@ init_session_state()
 
 # Main function
 def main():
+    # Verificar si necesitamos recargar la página (puede ocurrir desde cualquier parte de la aplicación)
+    if st.session_state.get('need_rerun', False):
+        st.session_state.need_rerun = False
+        st.rerun()
+    
     # Add a title
     st.title("👮‍♂️ Policía Local de Vigo")
     
@@ -82,8 +91,8 @@ def main():
                     if remember:
                         utils.save_credentials(nip, password, remember)
                     
-                    # Recargar la página para mostrar la interfaz autenticada
-                    st.rerun()
+                    # Configuramos una bandera para recargar después del callback
+                    st.session_state.need_rerun = True
                 else:
                     # Error de autenticación
                     st.session_state.login_error = result
@@ -111,14 +120,21 @@ def main():
             # Mostrar errores de login
             if st.session_state.login_error:
                 st.error(st.session_state.login_error)
+                
+            # Verificar si necesitamos recargar la página después del login exitoso
+            if st.session_state.get('need_rerun', False):
+                st.session_state.need_rerun = False
+                st.rerun()
             
             # Sección de recuperación de contraseña
             st.markdown("---")
             st.subheader("¿Olvidaste tu contraseña?")
             
-            if st.button("Recuperar contraseña"):
+            def change_to_recovery():
                 st.session_state.password_recovery = True
-                st.rerun()
+                
+            if st.button("Recuperar contraseña", on_click=change_to_recovery):
+                st.session_state.need_rerun = True
                 
         else:
             # Formulario de recuperación de contraseña
@@ -161,13 +177,16 @@ def main():
                 st.error(st.session_state.recovery_message["text"])
             
             # Botón para volver al login
-            if st.button("Volver al inicio de sesión"):
+            def back_to_login():
                 st.session_state.password_recovery = False
                 # Limpiar datos del formulario de recuperación
                 st.session_state.recovery_username = ""
                 st.session_state.recovery_email = ""
                 st.session_state.recovery_message = {"type": "", "text": ""}
-                st.rerun()
+                st.session_state.need_rerun = True
+                
+            if st.button("Volver al inicio de sesión", on_click=back_to_login):
+                pass
     
     else:
         # Usuario autenticado - Mostrar interfaz principal
@@ -177,11 +196,14 @@ def main():
             st.markdown("### Navegación")
             
             # Botón de cierre de sesión
-            if st.button("Cerrar Sesión"):
+            def logout():
                 # Usar el método nativo de Supabase para cerrar sesión
                 utils.clear_supabase_session()
                 utils.clear_saved_credentials()  # Limpiar credenciales guardadas locales
-                st.rerun()
+                st.session_state.need_rerun = True
+                
+            if st.button("Cerrar Sesión", on_click=logout):
+                pass
         
         # Mostrar la página principal después de la autenticación
         # Usamos el nombre del agente para la bienvenida si está disponible
