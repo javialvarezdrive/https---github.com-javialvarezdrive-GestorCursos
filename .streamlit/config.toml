@@ -5,6 +5,18 @@ port = 5000
 enableXsrfProtection = false
 enableCORS = false
 enableWebsocketCompression = false
+maxUploadSize = 200
+maxMessageSize = 200
+runOnSave = true
+
+[browser]
+serverAddress = "localhost"
+gatherUsageStats = false
+serverPort = 5000
+
+[runner]
+magicEnabled = true
+fastReruns = true
 
 [theme]
 primaryColor = "#0066cc"

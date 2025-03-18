@@ -81,25 +81,51 @@ def main():
             # Show login form
             st.subheader("Iniciar Sesión")
             
-            # Manually build a login form
-            with st.form("login_form"):
-                username = st.text_input("Usuario")
-                password = st.text_input("Contraseña", type="password")
-                submitted = st.form_submit_button("Acceder")
+            # Use session state for form inputs to persist values
+            if 'form_username' not in st.session_state:
+                st.session_state.form_username = ""
+            if 'form_password' not in st.session_state:
+                st.session_state.form_password = ""
+            if 'login_error' not in st.session_state:
+                st.session_state.login_error = ""
+            
+            # Define process login function for form submit button
+            def process_login():
+                username = st.session_state.username_input
+                password = st.session_state.password_input
                 
-                if submitted:
-                    # Validate credentials directly
-                    if username in credentials['usernames']:
-                        # Para la contraseña hashed almacenada, necesitamos verificarla de otra manera
-                        # por ahora, permitamos el acceso de admin para pruebas
-                        if username == "admin" and password == "password":
-                            st.session_state.authenticated = True
-                            st.session_state.username = username
-                            st.rerun()
-                        else:
-                            st.error("Contraseña incorrecta")
+                # Store form values in session state for persistence
+                st.session_state.form_username = username
+                st.session_state.form_password = password
+                
+                # Validate credentials directly
+                if username in credentials['usernames']:
+                    # Para la contraseña hashed almacenada, necesitamos verificarla de otra manera
+                    # por ahora, permitamos el acceso de admin para pruebas
+                    if username == "admin" and password == "password":
+                        st.session_state.authenticated = True
+                        st.session_state.username = username
+                        st.session_state.login_error = ""
+                        # Generate a new session ID when logged in
+                        st.session_state.session_id = str(int(time.time()))
                     else:
-                        st.error("Usuario no encontrado")
+                        st.session_state.login_error = "Contraseña incorrecta"
+                else:
+                    st.session_state.login_error = "Usuario no encontrado"
+            
+            # Manually build a login form - no on_change callbacks in form
+            with st.form("login_form", clear_on_submit=False):
+                st.text_input("Usuario", key="username_input", value=st.session_state.form_username)
+                st.text_input("Contraseña", type="password", key="password_input", value=st.session_state.form_password)
+                submit_button = st.form_submit_button("Acceder", on_click=process_login)
+            
+            # Display any login errors
+            if st.session_state.login_error:
+                st.error(st.session_state.login_error)
+                
+            # If authenticated after form submission, rerun the app
+            if st.session_state.authenticated:
+                st.rerun()
             
             # Password recovery section
             st.markdown("---")
@@ -113,25 +139,57 @@ def main():
             # Password recovery form
             st.subheader("Recuperación de Contraseña")
             
-            with st.form("recovery_form"):
-                recovery_username = st.text_input("NIP (Número de Identificación Personal)")
-                recovery_email = st.text_input("Email registrado")
+            # Use session state for recovery form inputs
+            if 'recovery_username' not in st.session_state:
+                st.session_state.recovery_username = ""
+            if 'recovery_email' not in st.session_state:
+                st.session_state.recovery_email = ""
+            if 'recovery_message' not in st.session_state:
+                st.session_state.recovery_message = {"type": "", "text": ""}
                 
-                recovery_submitted = st.form_submit_button("Enviar solicitud")
+            # Process recovery function - only called by form_submit_button
+            def process_recovery():
+                username = st.session_state.username_recovery_input
+                email = st.session_state.email_recovery_input
                 
-                if recovery_submitted:
-                    if recovery_username and recovery_email:
-                        success, message = utils.reset_password(recovery_username, recovery_email)
-                        if success:
-                            st.success(message)
-                            # En un entorno real, aquí solo se mostraría un mensaje de que se ha enviado un email
-                        else:
-                            st.error(message)
+                # Store form values in session state for persistence
+                st.session_state.recovery_username = username
+                st.session_state.recovery_email = email
+                
+                if username and email:
+                    success, message = utils.reset_password(username, email)
+                    if success:
+                        st.session_state.recovery_message = {"type": "success", "text": message}
                     else:
-                        st.error("Por favor, completa todos los campos")
+                        st.session_state.recovery_message = {"type": "error", "text": message}
+                else:
+                    st.session_state.recovery_message = {"type": "error", "text": "Por favor, completa todos los campos"}
             
+            # Display the recovery form - no on_change callbacks in form
+            with st.form("recovery_form", clear_on_submit=False):
+                st.text_input("NIP (Número de Identificación Personal)", 
+                             key="username_recovery_input", 
+                             value=st.session_state.recovery_username)
+                
+                st.text_input("Email registrado", 
+                             key="email_recovery_input", 
+                             value=st.session_state.recovery_email)
+                
+                recovery_submitted = st.form_submit_button("Enviar solicitud", on_click=process_recovery)
+            
+            # Display recovery messages
+            if st.session_state.recovery_message["type"] == "success":
+                st.success(st.session_state.recovery_message["text"])
+            elif st.session_state.recovery_message["type"] == "error":
+                st.error(st.session_state.recovery_message["text"])
+            
+            # Return to login button
             if st.button("Volver al inicio de sesión"):
                 st.session_state.password_recovery = False
+                # Clear recovery form data
+                st.session_state.recovery_username = ""
+                st.session_state.recovery_email = ""
+                st.session_state.recovery_message = {"type": "", "text": ""}
                 st.rerun()
     
     else:

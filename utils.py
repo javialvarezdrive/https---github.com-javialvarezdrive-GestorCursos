@@ -6,8 +6,11 @@ import random
 import string
 
 def check_authentication():
-    """Check if user is authenticated"""
-    # Ensure we have authentication variables set
+    """
+    Check if user is authenticated and ensure session state is properly initialized
+    This function ensures a consistent state across all pages
+    """
+    # Initialize all session state variables
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     
@@ -17,12 +20,25 @@ def check_authentication():
     if "session_id" not in st.session_state:
         import time
         st.session_state.session_id = str(int(time.time()))
+        
+    if "user_role" not in st.session_state:
+        st.session_state.user_role = None
+        
+    if "need_rerun" not in st.session_state:
+        st.session_state.need_rerun = False
     
     # Check if user is authenticated
     if not st.session_state.authenticated:
         # Redirect to main app for login
         st.warning("Por favor, inicia sesión para acceder a esta página.")
         st.stop()
+        
+    # Make the session persistent with unique session ID
+    # This method uses session state's persistence to maintain login state
+    current_session_id = st.session_state.session_id
+    if not current_session_id:
+        import time
+        st.session_state.session_id = str(int(time.time()))
 
 def format_date(date_str):
     """Format date to DD/MM/YYYY"""
