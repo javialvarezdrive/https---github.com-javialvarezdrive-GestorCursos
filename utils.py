@@ -98,12 +98,13 @@ def sign_in_with_nip(nip, password):
             # Obtener nombre del agente
             try:
                 agent_name = get_agent_name(nip)
-                if agent_name != "Agente no encontrado" and agent_name != "Error":
+                if agent_name and agent_name != "Agente no encontrado" and agent_name != "Error":
                     st.session_state.agent_name = agent_name
                 else:
                     st.session_state.agent_name = f"Agente {nip}"
-            except:
+            except Exception as e:
                 st.session_state.agent_name = f"Agente {nip}"
+                st.error(f"Error al obtener el nombre del agente: {str(e)}")
             
             # Generar un nuevo ID de sesión
             import time
@@ -648,7 +649,11 @@ def get_agent_name(nip):
         
         if response.data:
             agent = response.data[0]
-            return f"{agent['nombre']} {agent['apellido1']} {agent['apellido2']}".strip()
+            nombre = agent.get('nombre', '')
+            apellido1 = agent.get('apellido1', '')
+            apellido2 = agent.get('apellido2', '')
+            
+            return f"{nombre} {apellido1} {apellido2}".strip()
         return "Agente no encontrado"
     except Exception as e:
         st.error(f"Error al obtener el nombre del agente: {str(e)}")
