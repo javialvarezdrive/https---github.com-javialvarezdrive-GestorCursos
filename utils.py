@@ -217,7 +217,7 @@ def check_supabase_auth():
     # No hay sesión activa
     return False
 
-def save_credentials(nip, password, remember=False):
+def save_credentials(email, password, remember=False):
     """Guarda las credenciales en un archivo JSON y cookies si remember=True"""
     if not remember:
         # Si no se quiere recordar, borrar cualquier sesión guardada
@@ -238,7 +238,7 @@ def save_credentials(nip, password, remember=False):
         os.makedirs(".streamlit", exist_ok=True)
         
         data = {
-            'nip': nip,
+            'email': email,
             'password': encoded_password,
             'timestamp': int(time.time())
         }
@@ -250,7 +250,7 @@ def save_credentials(nip, password, remember=False):
         # Guardar en cookies del navegador
         # Crear un token para el navegador
         cookie_data = {
-            'nip': nip,
+            'email': email,
             'pwd': encoded_password, 
             'ts': int(time.time())
         }
@@ -306,6 +306,23 @@ def load_credentials():
             # Decodificar la contraseña
             if 'password' in data:
                 data['password'] = base64.b64decode(data['password'].encode()).decode()
+            
+            # Asegurarse de que tenemos campo email (para compatibilidad con credenciales antiguas)
+            if 'nip' in data and 'email' not in data:
+                # Buscar email asociado al NIP para migrar
+                try:
+                    nip = data['nip']
+                    email = get_agent_email_by_nip(nip)
+                    if email:
+                        data['email'] = email
+                    else:
+                        # Si no se encuentra el email, no podemos usar estas credenciales antiguas
+                        raise Exception("No se encontró email para el NIP guardado")
+                except:
+                    # Si hay error, ignorar estas credenciales y crear nuevas
+                    if os.path.exists(SESSION_FILE):
+                        os.remove(SESSION_FILE)
+                    return None
             
             creds_data = data
         except Exception as e:

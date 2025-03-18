@@ -31,8 +31,8 @@ def init_session_state():
         st.session_state.password_recovery = False
         
     # Login form fields
-    if 'form_nip' not in st.session_state:
-        st.session_state.form_nip = ""
+    if 'form_email' not in st.session_state:
+        st.session_state.form_email = ""
     if 'form_password' not in st.session_state:
         st.session_state.form_password = ""
     if 'login_error' not in st.session_state:
@@ -73,37 +73,93 @@ def main():
             
             # Función para procesar el login
             def process_login():
-                nip = st.session_state.nip_input
+                email = st.session_state.email_input
                 password = st.session_state.password_input
                 remember = st.session_state.get("remember_me", False)
                 
                 # Almacenar valores en session_state para persistencia
-                st.session_state.form_nip = nip
+                st.session_state.form_email = email
                 st.session_state.form_password = password
                 
-                # Iniciar sesión usando el nuevo método de Supabase
-                success, result = utils.sign_in_with_nip(nip, password)
-                if success:
-                    # Autenticación exitosa - la sesión ya se ha configurado en sign_in_with_nip
+                # Iniciar sesión usando directamente la API nativa de Supabase
+                try:
+                    response = config.supabase.auth.sign_in_with_password({
+                        "email": email,
+                        "password": password
+                    })
+                    
+                    # Autenticación exitosa
+                    # Guardar la sesión en session_state
+                    st.session_state['supabase_session'] = response.session
+                    st.session_state['authenticated'] = True
+                    
+                    # Obtener el NIP desde los metadatos del usuario o buscarlo en la tabla de agentes
+                    user_metadata = response.user.user_metadata if hasattr(response.user, 'user_metadata') else {}
+                    nip = user_metadata.get('nip')
+                    
+                    # Si no hay NIP en los metadatos, intentar buscarlo por email
+                    if not nip:
+                        try:
+                            # Buscar el agente por email
+                            agent_response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("email", email).execute()
+                            if agent_response.data:
+                                nip = agent_response.data[0].get('nip')
+                        except Exception as e:
+                            st.error(f"Error al buscar el NIP del agente: {str(e)}")
+                    
+                    # Guardar NIP y datos del usuario
+                    st.session_state['user_nip'] = nip
+                    st.session_state['user_data'] = {
+                        'id': response.user.id,
+                        'email': response.user.email,
+                        'nip': nip,
+                        'metadata': user_metadata
+                    }
+                    
+                    # Obtener nombre del agente si se encontró el NIP
+                    if nip:
+                        try:
+                            agent_name = utils.get_agent_name(nip)
+                            if agent_name and agent_name != "Agente no encontrado" and agent_name != "Error":
+                                st.session_state.agent_name = agent_name
+                            else:
+                                st.session_state.agent_name = "Usuario Autenticado"
+                        except Exception as e:
+                            st.session_state.agent_name = "Usuario Autenticado"
+                            st.error(f"Error al obtener el nombre del agente: {str(e)}")
+                    else:
+                        st.session_state.agent_name = "Usuario Autenticado"
+                    
+                    # Generar un nuevo ID de sesión
+                    import time
+                    st.session_state.session_id = str(int(time.time()))
+                    
+                    # Limpiar error de login
                     st.session_state.login_error = ""
                     
                     # Si se seleccionó "Recordar sesión", guardar las credenciales
                     if remember:
-                        utils.save_credentials(nip, password, remember)
+                        utils.save_credentials(email, password, remember)
                     
                     # Configuramos una bandera para recargar después del callback
                     st.session_state.need_rerun = True
-                else:
+                    
+                except Exception as e:
                     # Error de autenticación
-                    st.session_state.login_error = result
+                    error_message = str(e)
+                    if "Invalid login credentials" in error_message:
+                        st.session_state.login_error = "Credenciales incorrectas"
+                    else:
+                        st.session_state.login_error = f"Error de autenticación: {error_message}"
+                    
                     # Limpiar credenciales guardadas en caso de error
                     utils.clear_saved_credentials()
             
             # Formulario de login
             with st.form("login_form", clear_on_submit=False):
-                st.text_input("NIP (Número de Identificación Personal)", 
-                             key="nip_input", 
-                             value=st.session_state.form_nip)
+                st.text_input("Email", 
+                             key="email_input", 
+                             value=st.session_state.form_email if 'form_email' in st.session_state else "")
                 
                 st.text_input("Contraseña", 
                              type="password", 
@@ -142,28 +198,30 @@ def main():
             
             # Función para procesar la recuperación
             def process_recovery():
-                username = st.session_state.username_recovery_input
                 email = st.session_state.email_recovery_input
                 
                 # Almacenar valores en session_state para persistencia
-                st.session_state.recovery_username = username
                 st.session_state.recovery_email = email
                 
-                if username and email:
-                    success, message = utils.reset_password(username, email)
-                    if success:
-                        st.session_state.recovery_message = {"type": "success", "text": message}
-                    else:
-                        st.session_state.recovery_message = {"type": "error", "text": message}
+                if email:
+                    try:
+                        # Usar directamente la API de Supabase para recuperación de contraseña
+                        config.supabase.auth.reset_password_for_email(email)
+                        
+                        # Mensaje de éxito
+                        success_message = (
+                            "Se ha enviado un correo con instrucciones para restablecer tu contraseña. "
+                            "Por favor, revisa tu bandeja de entrada."
+                        )
+                        st.session_state.recovery_message = {"type": "success", "text": success_message}
+                    except Exception as e:
+                        error_message = str(e)
+                        st.session_state.recovery_message = {"type": "error", "text": f"Error: {error_message}"}
                 else:
-                    st.session_state.recovery_message = {"type": "error", "text": "Por favor, completa todos los campos"}
+                    st.session_state.recovery_message = {"type": "error", "text": "Por favor, introduce tu email"}
             
             # Formulario de recuperación
             with st.form("recovery_form", clear_on_submit=False):
-                st.text_input("NIP (Número de Identificación Personal)", 
-                             key="username_recovery_input", 
-                             value=st.session_state.recovery_username)
-                
                 st.text_input("Email registrado", 
                              key="email_recovery_input", 
                              value=st.session_state.recovery_email)
@@ -180,7 +238,6 @@ def main():
             def back_to_login():
                 st.session_state.password_recovery = False
                 # Limpiar datos del formulario de recuperación
-                st.session_state.recovery_username = ""
                 st.session_state.recovery_email = ""
                 st.session_state.recovery_message = {"type": "", "text": ""}
                 st.session_state.need_rerun = True
