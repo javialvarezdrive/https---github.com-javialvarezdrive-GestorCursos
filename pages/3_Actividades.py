@@ -93,8 +93,8 @@ with tab1:
 with tab2:
     st.subheader("Añadir Nueva Actividad")
     
-    # Check if user is monitor
-    is_monitor = False
+    # Obtener información del usuario para asignar como monitor predeterminado
+    user_nip = None
     try:
         # Get username from session
         username = st.session_state.get('username', '')
@@ -103,18 +103,11 @@ with tab2:
             user_response = config.supabase.table(config.USERS_TABLE).select("agent_nip").eq("username", username).execute()
             if user_response.data:
                 user_nip = user_response.data[0]['agent_nip']
-                
-                # Check if user is a monitor
-                agent_response = config.supabase.table(config.AGENTS_TABLE).select("monitor").eq("nip", user_nip).execute()
-                if agent_response.data:
-                    is_monitor = agent_response.data[0]['monitor']
     except Exception as e:
-        st.error(f"Error al verificar el rol de monitor: {str(e)}")
+        st.error(f"Error al obtener información del usuario: {str(e)}")
     
-    if not is_monitor:
-        st.warning("Solo los monitores pueden programar actividades.")
-    else:
-        # Create form
+    # Todos los usuarios autenticados pueden programar actividades
+    # Create form
         with st.form("add_activity_form"):
             col1, col2 = st.columns(2)
             
