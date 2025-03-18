@@ -17,11 +17,10 @@ from cryptography.fernet import Fernet
 SESSION_FILE = '.streamlit/saved_session.json'
 
 def save_credentials(nip, password, remember=False):
-    """Guarda las credenciales en un archivo JSON si remember=True"""
+    """Guarda las credenciales en un archivo JSON y cookies si remember=True"""
     if not remember:
         # Si no se quiere recordar, borrar cualquier sesión guardada
-        if os.path.exists(SESSION_FILE):
-            os.remove(SESSION_FILE)
+        clear_saved_credentials()
         return False
     
     try:
@@ -32,8 +31,10 @@ def save_credentials(nip, password, remember=False):
         
         # Simple "encriptación" básica (base64)
         # En un entorno real deberíamos usar encriptación más fuerte
-        # Para un entorno de desarrollo esto es suficiente
         encoded_password = base64.b64encode(password.encode()).decode()
+        
+        # Crear directorio .streamlit si no existe
+        os.makedirs(".streamlit", exist_ok=True)
         
         data = {
             'nip': nip,
@@ -45,6 +46,41 @@ def save_credentials(nip, password, remember=False):
         with open(SESSION_FILE, 'w') as f:
             json.dump(data, f)
             
+        # Guardar en cookies del navegador
+        # Crear un token para el navegador
+        cookie_data = {
+            'nip': nip,
+            'pwd': encoded_password, 
+            'ts': int(time.time())
+        }
+        
+        # Convertir a JSON y codificar en base64
+        cookie_token = base64.b64encode(json.dumps(cookie_data).encode()).decode()
+        
+        # Generar script JavaScript para establecer la cookie
+        js = f"""
+        <script>
+        try {{
+            // Establecer cookie con 30 días de duración
+            const days = 30;
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            const expires = "; expires=" + date.toUTCString();
+            
+            document.cookie = "{COOKIE_NAME}=" + '{cookie_token}' + expires + "; path=/; SameSite=Strict";
+            console.log('Cookie de sesión guardada');
+            
+            // También guardar en localStorage como respaldo
+            localStorage.setItem('{COOKIE_NAME}', '{cookie_token}');
+            localStorage.setItem('auth_token', '{cookie_token}');
+            console.log('Datos guardados en localStorage');
+        }} catch (e) {{
+            console.error('Error guardando en navegador:', e);
+        }}
+        </script>
+        """
+        st.markdown(js, unsafe_allow_html=True)
+            
         st.success("Sesión guardada. La próxima vez iniciarás sesión automáticamente.")
         return True
     except Exception as e:
@@ -52,28 +88,37 @@ def save_credentials(nip, password, remember=False):
         return False
 
 def load_credentials():
-    """Carga credenciales desde archivo JSON si existen"""
-    if not os.path.exists(SESSION_FILE):
-        return None
+    """Carga credenciales desde archivo JSON o cookies si existen"""
+    # Variable para almacenar los datos de credenciales
+    creds_data = None
     
-    try:
-        # Leer datos del archivo JSON
-        import json
-        import base64
-        
-        with open(SESSION_FILE, 'r') as f:
-            data = json.load(f)
-        
-        # Decodificar la contraseña
-        if 'password' in data:
-            data['password'] = base64.b64decode(data['password'].encode()).decode()
-        
-        return data
-    except Exception as e:
-        st.error(f"Error cargando credenciales: {str(e)}")
-        if os.path.exists(SESSION_FILE):
-            os.remove(SESSION_FILE)  # Borrar archivo corrupto
-        return None
+    # Primero intentar cargar desde el archivo
+    if os.path.exists(SESSION_FILE):
+        try:
+            # Leer datos del archivo JSON
+            import json
+            import base64
+            
+            with open(SESSION_FILE, 'r') as f:
+                data = json.load(f)
+            
+            # Decodificar la contraseña
+            if 'password' in data:
+                data['password'] = base64.b64decode(data['password'].encode()).decode()
+            
+            creds_data = data
+        except Exception as e:
+            st.error(f"Error cargando credenciales desde archivo: {str(e)}")
+            if os.path.exists(SESSION_FILE):
+                os.remove(SESSION_FILE)  # Borrar archivo corrupto
+    
+    # Si no se pudo cargar desde archivo o no existe, intentar desde cookies/localStorage
+    if not creds_data:
+        # Generar un código HTML oculto para recuperar la cookie y luego procesarla
+        # Esto será procesado en la función que llame a load_session_from_cookie
+        load_session_from_cookie()
+    
+    return creds_data
 
 def clear_saved_credentials():
     """Elimina las credenciales guardadas"""
@@ -82,9 +127,12 @@ def clear_saved_credentials():
         return True
     return False
 
+# Clave para las cookies del navegador (para acceder desde JavaScript)
+COOKIE_NAME = 'vigo_police_session'
+
 def save_session_to_cookie():
     """
-    Guarda la información de sesión en localStorage para persistencia
+    Guarda la información de sesión en cookies y localStorage para persistencia
     """
     if st.session_state.get("authenticated", False):
         import json
@@ -101,12 +149,21 @@ def save_session_to_cookie():
         # Convertir los datos a una cadena JSON y luego codificar en base64
         session_token = base64.b64encode(json.dumps(session_data).encode()).decode()
         
-        # Usar localStorage directamente con JavaScript
+        # Usar cookies y localStorage con JavaScript para asegurar persistencia
         js = f"""
         <script>
         try {{
+            // Guardar en localStorage
             localStorage.setItem('auth_token', '{session_token}');
-            console.log('Sesión guardada con éxito');
+            
+            // Establecer cookie con 30 días de duración
+            const days = 30;
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            const expires = "; expires=" + date.toUTCString();
+            document.cookie = "{COOKIE_NAME}=" + '{session_token}' + expires + "; path=/; SameSite=Strict";
+            
+            console.log('Sesión guardada en localStorage y cookies');
         }} catch (e) {{
             console.error('Error guardando sesión:', e);
         }}
@@ -116,19 +173,33 @@ def save_session_to_cookie():
 
 def load_session_from_cookie():
     """
-    Enfoque más simple: buscar directamente el token en localStorage 
+    Enfoque mejorado: buscar el token en cookies y localStorage 
     y usarlo en la aplicación
     """
     # Crear y ejecutar JavaScript para extraer el token
     js_code = """
     <script>
+    // Función para obtener una cookie por nombre
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+    
     // Función que se ejecuta al inicio
     (function() {
         try {
-            // Buscar el token en localStorage
-            const authToken = localStorage.getItem('auth_token');
+            // Buscar primero en cookies
+            let authToken = getCookie('vigo_police_session');
             
-            // Si existe un token, mostrarlo en un elemento oculto que pueda ser leído por Streamlit
+            // Si no está en cookies, buscar en localStorage
+            if (!authToken) {
+                authToken = localStorage.getItem('auth_token');
+                console.log('Token no encontrado en cookies, usando localStorage');
+            }
+            
+            // Si existe un token en cualquiera de los dos lugares
             if (authToken) {
                 // Crear un campo para recibir el token
                 const hiddenInput = document.createElement('div');
@@ -137,9 +208,9 @@ def load_session_from_cookie():
                 hiddenInput.innerText = authToken;
                 document.body.appendChild(hiddenInput);
                 
-                console.log('Token encontrado en localStorage');
+                console.log('Token de sesión encontrado');
                 
-                // Si hay un campo de entrada con id token-input, actualizarlo
+                // Intentar actualizar un campo si existe (para formularios)
                 setTimeout(() => {
                     const inputField = document.querySelector('#token-input');
                     if (inputField) {
@@ -150,38 +221,53 @@ def load_session_from_cookie():
                         const event = new Event('change', { bubbles: true });
                         inputField.dispatchEvent(event);
                     }
+                    
+                    // Crear un botón oculto que active streamlit
+                    const refreshButton = document.createElement('button');
+                    refreshButton.id = 'refresh-session';
+                    refreshButton.style.display = 'none';
+                    refreshButton.addEventListener('click', function() {
+                        // Este evento será capturado por Streamlit
+                        console.log('Intentando reactivar sesión');
+                    });
+                    document.body.appendChild(refreshButton);
+                    refreshButton.click();
+                    
                 }, 500);
             } else {
-                console.log('No hay token en localStorage');
+                console.log('No hay token de sesión guardado');
             }
         } catch (e) {
-            console.error('Error accediendo a localStorage:', e);
+            console.error('Error accediendo a datos de sesión:', e);
         }
     })();
     </script>
     <div id="token-container"></div>
+    <input type="hidden" id="token-input" />
     """
     st.markdown(js_code, unsafe_allow_html=True)
     
-    # Como solución más simple, usaremos un enfoque basado en una variable local
-    # Esto no funcionará con el refresco de página, pero funciona para el cierre de sesión
-    if "user_nip" in st.session_state and st.session_state["user_nip"] is not None:
-        return True
-            
+    # Este método se mejorará en otras partes del código
+    # para detectar el token y autenticar automáticamente
     return False
 
 def clear_session_cookie():
     """
-    Elimina la sesión de localStorage
+    Elimina la sesión de localStorage y cookies
     """
-    # Usar JavaScript para eliminar el token de localStorage
+    # Usar JavaScript para eliminar todas las formas de almacenamiento
     js = """
     <script>
     try {
+        // Eliminar de localStorage
         localStorage.removeItem('auth_token');
-        console.log('Token eliminado de localStorage');
+        
+        // Eliminar cookie estableciendo una fecha pasada
+        document.cookie = "vigo_police_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Strict";
+        
+        console.log('Sesión eliminada de localStorage y cookies');
     } catch (e) {
-        console.error('Error al eliminar token:', e);
+        console.error('Error al eliminar datos de sesión:', e);
     }
     </script>
     """
@@ -200,6 +286,9 @@ def clear_session_cookie():
     # Limpiar cualquier campo de entrada relacionado con la autenticación
     if "auth_token_input" in st.session_state:
         st.session_state["auth_token_input"] = ""
+        
+    # También eliminar el archivo de sesión guardado
+    clear_saved_credentials()
 
 def check_authentication():
     """

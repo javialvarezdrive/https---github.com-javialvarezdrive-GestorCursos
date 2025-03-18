@@ -63,10 +63,77 @@ def main():
     # Add a title
     st.title("👮‍♂️ Policía Local de Vigo")
     
-    # Intentar autenticar con credenciales guardadas
+    # Intentar autenticar con credenciales guardadas (archivo o cookies)
     if not st.session_state.get("authenticated", False):
         with st.spinner("Comprobando sesión guardada..."):
+            # Primero intentamos cargar desde el archivo
             saved_credentials = utils.load_credentials()
+            
+            # También crear un componente oculto para recibir token de cookie
+            # Este código se insertará en la página y creará un campo oculto
+            st.markdown("""
+            <div id="session-data-container" style="display:none;"></div>
+            <input type="hidden" id="token-input" name="token" />
+            """, unsafe_allow_html=True)
+            
+            # Componente para obtener token de cookie/localStorage
+            cookie_data_js = """
+            <script>
+            // Función para obtener una cookie por nombre
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return null;
+            }
+            
+            // Intentar obtener datos de sesión
+            (function() {
+                try {
+                    // Buscar token en diferentes formas de almacenamiento
+                    let authToken = getCookie('vigo_police_session');
+                    
+                    if (!authToken) {
+                        authToken = localStorage.getItem('vigo_police_session');
+                    }
+                    
+                    if (!authToken) {
+                        authToken = localStorage.getItem('auth_token');
+                    }
+                    
+                    if (authToken) {
+                        console.log('Token de sesión encontrado, auto-login iniciado');
+                        
+                        // Crear campo oculto con el token
+                        const tokenInput = document.getElementById('token-input');
+                        if (tokenInput) {
+                            tokenInput.value = authToken;
+                            
+                            // Crear un botón para activar streamlit
+                            const loginButton = document.createElement('button');
+                            loginButton.id = 'auto-login-button';
+                            loginButton.style.display = 'none';
+                            loginButton.textContent = 'Auto Login';
+                            document.body.appendChild(loginButton);
+                            
+                            // Simular clic para que Streamlit tome el valor
+                            setTimeout(() => {
+                                console.log('Ejecutando auto-login');
+                                loginButton.click();
+                            }, 500);
+                        }
+                    } else {
+                        console.log('No hay datos de sesión guardados');
+                    }
+                } catch (e) {
+                    console.error('Error verificando almacenamiento:', e);
+                }
+            })();
+            </script>
+            """
+            st.markdown(cookie_data_js, unsafe_allow_html=True)
+            
+            # Procesar credenciales guardadas si existen
             if saved_credentials and 'nip' in saved_credentials and 'password' in saved_credentials:
                 # Intentar iniciar sesión con las credenciales guardadas
                 nip = saved_credentials['nip']
@@ -100,7 +167,84 @@ def main():
         
     # Intentar cargar sesión desde cookies si existe
     if not st.session_state.get("authenticated", False):
+        # Componente para capturar datos desde cookies/localStorage
         utils.load_session_from_cookie()
+        
+        # Buscar si hay un token de cookie disponible
+        if 'token-input' in st.session_state:
+            try:
+                token_data = st.session_state['token-input']
+                if token_data:
+                    # Decodificar el token
+                    import json
+                    import base64
+                    
+                    # Decodificar token de base64 a JSON
+                    token_json = base64.b64decode(token_data).decode('utf-8')
+                    token_obj = json.loads(token_json)
+                    
+                    # Extraer NIP del token
+                    if 'user_nip' in token_obj:
+                        # Token de sesión de usuario
+                        nip = token_obj['user_nip']
+                        # Intentar autenticar con el NIP encontrado
+                        user = utils.get_user_by_nip(nip)
+                        if user:
+                            # Autenticación exitosa desde cookie
+                            st.session_state["authenticated"] = True
+                            st.session_state["user_nip"] = nip
+                            st.session_state["user_data"] = user
+                            
+                            # Obtener nombre del agente
+                            try:
+                                agent_name = utils.get_agent_name(nip)
+                                if agent_name != "Agente no encontrado" and agent_name != "Error":
+                                    st.session_state.agent_name = agent_name
+                                else:
+                                    st.session_state.agent_name = f"Agente {nip}"
+                            except:
+                                st.session_state.agent_name = f"Agente {nip}"
+                            
+                            # Generar un nuevo ID de sesión
+                            st.session_state.session_id = str(int(time.time()))
+                            st.success("Sesión restaurada desde navegador")
+                            st.rerun()
+                    elif 'nip' in token_obj:
+                        # Token de credenciales guardadas
+                        nip = token_obj['nip']
+                        # Si tiene contraseña codificada, decodificarla
+                        if 'pwd' in token_obj:
+                            encoded_pwd = token_obj['pwd']
+                            pwd = base64.b64decode(encoded_pwd.encode()).decode()
+                            
+                            # Verificar credenciales
+                            success, result = utils.verify_credentials(nip, pwd)
+                            if success:
+                                # Autenticación exitosa
+                                user = result
+                                st.session_state["authenticated"] = True
+                                st.session_state["user_nip"] = nip
+                                st.session_state["user_data"] = user
+                                
+                                # Obtener nombre del agente
+                                try:
+                                    agent_name = utils.get_agent_name(nip)
+                                    if agent_name != "Agente no encontrado" and agent_name != "Error":
+                                        st.session_state.agent_name = agent_name
+                                    else:
+                                        st.session_state.agent_name = f"Agente {nip}"
+                                except:
+                                    st.session_state.agent_name = f"Agente {nip}"
+                                
+                                # Generar un nuevo ID de sesión
+                                st.session_state.session_id = str(int(time.time()))
+                                st.success("Sesión restaurada desde navegador")
+                                st.rerun()
+            except Exception as e:
+                st.error(f"Error al procesar token de sesión: {str(e)}")
+                # Limpiar token para evitar bucles de error
+                if 'token-input' in st.session_state:
+                    st.session_state['token-input'] = None
         
     # If not authenticated, show login or password recovery
     if not st.session_state.get("authenticated", False):
