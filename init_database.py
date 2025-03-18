@@ -5,8 +5,19 @@ import pandas as pd
 def initialize_database():
     """
     Inicializa la base de datos con datos de prueba.
-    Crea un agente y un usuario asociado para probar el inicio de sesión.
+    Crea las tablas necesarias y un usuario asociado para probar el inicio de sesión.
     """
+    # Crear tablas
+    try:
+        print("Creando tablas...")
+        
+        # Leer el archivo SQL
+        with open('sql/functions.sql', 'r') as file:
+            sql_commands = file.read()
+        
+        # Ejecutar los comandos SQL
+        config.supabase.query(sql_commands).execute()
+        print("Tablas creadas correctamente.")
     try:
         print("Inicializando base de datos con datos de prueba...")
         
