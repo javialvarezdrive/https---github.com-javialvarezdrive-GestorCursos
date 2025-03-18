@@ -44,6 +44,7 @@ def save_credentials(nip, password, remember=False):
         fernet = Fernet(key)
         
         # Datos a guardar
+        import time
         data = {
             'nip': nip,
             'password': password,
@@ -82,6 +83,7 @@ def load_credentials():
         data = pickle.loads(serialized)
         
         # Verificar expiración (opcional, por ahora no expira)
+        # import time
         # if int(time.time()) - data['timestamp'] > 604800:  # 7 días
         #    return None
         
