@@ -160,8 +160,6 @@ with tab1:
             if "Todos" not in filtro_monitor and monitor_name not in filtro_monitor:
                 pasa_filtro = False
                 
-
-                
             # Filtro de participante
             if "Todos" not in filtro_participante:
                 participante_encontrado = False
