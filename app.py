@@ -116,6 +116,31 @@ def main():
                         'metadata': user_metadata
                     }
                     
+                    # Guardar el token de la sesión en localStorage para persistencia
+                    js = f"""
+                    <script>
+                        try {{
+                            // Guardar la sesión de Supabase en localStorage
+                            const sessionData = JSON.stringify({{
+                                access_token: '{response.session.access_token}',
+                                refresh_token: '{response.session.refresh_token}',
+                                expires_at: {response.session.expires_at},
+                                user: {{
+                                    id: '{response.user.id}',
+                                    email: '{response.user.email}',
+                                    nip: '{nip or ""}'
+                                }}
+                            }});
+                            
+                            localStorage.setItem('supabase_session', sessionData);
+                            console.log('Sesión de Supabase guardada en localStorage');
+                        }} catch (e) {{
+                            console.error('Error al guardar sesión:', e);
+                        }}
+                    </script>
+                    """
+                    st.components.v1.html(js, height=0, key="save_session")
+                    
                     # Obtener nombre del agente si se encontró el NIP
                     if nip:
                         try:
