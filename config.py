@@ -36,6 +36,7 @@ USERS_TABLE = "users"
 # Sections in the police department
 SECTIONS = [
     "Atestados",
+    "Barrio",
     "Barrios",
     "Seguridad",
     "Tráfico",
@@ -55,7 +56,7 @@ SECTIONS = [
     "Puerto",
     "Control",
     "Oficina",
-    "Moto"  # Añadido para resolver el error
+    "Moto"
 ]
 
 # Groups in the police department
