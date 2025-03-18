@@ -22,11 +22,11 @@ if "activities_df" not in st.session_state:
 st.title("🗓️ Gestión de Actividades")
 
 # Create tabs
-tab1, tab2, tab3 = st.tabs(["Ver Actividades", "Añadir Actividad", "Editar Actividad"])
+tab1, tab2, tab3 = st.tabs(["Próximas Actividades", "Añadir Actividad", "Editar Actividad"])
 
-# Tab 1: View Activities
+# Tab 1: Próximas Actividades
 with tab1:
-    st.subheader("Lista de Actividades")
+    st.subheader("Próximas Actividades")
     
     # Usar el DataFrame almacenado en session_state
     activities_df = st.session_state.activities_df
@@ -81,27 +81,28 @@ with tab1:
         secciones.sort()
         all_participants.sort()
         
-        # Filtros
-        st.write("### Filtros")
-        col1, col2 = st.columns(2)
+        # Definir fechas por defecto
+        fecha_actual = datetime.now().date()
+        fecha_fin_default = fecha_actual + pd.Timedelta(days=30)
+        
+        # Filtros en 3 columnas
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             # Filtro de rango de fechas
-            min_date = datetime.strptime(min(activities_df['fecha']), "%Y-%m-%d") if 'fecha' in activities_df.columns and not activities_df.empty else datetime.now()
-            max_date = datetime.strptime(max(activities_df['fecha']), "%Y-%m-%d") if 'fecha' in activities_df.columns and not activities_df.empty else datetime.now()
-            
-            fecha_inicio = st.date_input("Fecha inicio", min_date)
-            fecha_fin = st.date_input("Fecha fin", max_date)
-            
-            # Filtro de cursos
-            filtro_curso = st.multiselect("Filtrar por curso", ["Todos"] + cursos, default="Todos")
+            fecha_inicio = st.date_input("Fecha inicio", fecha_actual)
+            fecha_fin = st.date_input("Fecha fin", fecha_fin_default)
         
         with col2:
-            # Filtro de monitor
-            filtro_monitor = st.multiselect("Filtrar por monitor", ["Todos"] + monitores, default="Todos")
+            # Filtro de cursos
+            filtro_curso = st.multiselect("Filtrar por curso", ["Todos"] + cursos, default="Todos")
             
             # Filtro de sección
             filtro_seccion = st.multiselect("Filtrar por sección", ["Todas"] + secciones, default="Todas")
+            
+        with col3:
+            # Filtro de monitor
+            filtro_monitor = st.multiselect("Filtrar por monitor", ["Todos"] + monitores, default="Todos")
             
             # Filtro de participante
             filtro_participante = st.multiselect("Filtrar por participante", ["Todos"] + all_participants, default="Todos")
