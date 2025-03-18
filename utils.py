@@ -7,10 +7,20 @@ import string
 
 def check_authentication():
     """Check if user is authenticated"""
+    # Ensure we have authentication variables set
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
     
+    if "username" not in st.session_state:
+        st.session_state.username = None
+        
+    if "session_id" not in st.session_state:
+        import time
+        st.session_state.session_id = str(int(time.time()))
+    
+    # Check if user is authenticated
     if not st.session_state.authenticated:
+        # Redirect to main app for login
         st.warning("Por favor, inicia sesión para acceder a esta página.")
         st.stop()
 

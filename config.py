@@ -39,7 +39,8 @@ SECTIONS = [
     "Centralita",
     "Puerto",
     "Control",
-    "Oficina"
+    "Oficina",
+    "Moto"  # Añadido para resolver el error
 ]
 
 # Groups in the police department

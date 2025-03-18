@@ -6,6 +6,7 @@ import yaml
 from yaml.loader import SafeLoader
 import config
 import utils
+import time
 
 # Configure the page
 st.set_page_config(
@@ -15,7 +16,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Setup session state variables
+# Setup session state variables with session persistence
+if 'session_id' not in st.session_state:
+    # Generate a unique session ID for this session
+    st.session_state.session_id = str(int(time.time()))
+
+# Setup authentication state
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
