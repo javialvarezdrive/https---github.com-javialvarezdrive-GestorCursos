@@ -20,93 +20,92 @@ tab1, tab2 = st.tabs(["Dashboard General", "Vista Dinámica"])
 
 # Main function
 def show_statistics():
-    # Parte 1: Dashboard General
-    with tab1:
-        # Sidebar filters for dashboard
-        st.sidebar.header("Filtros Dashboard")
-        
-        # Date range filter
-        st.sidebar.subheader("Rango de fechas")
-        
-        # Calculate default date ranges (current month)
-        today = datetime.now()
-        start_of_month = datetime(today.year, today.month, 1)
-        
-        # Default start and end dates
-        default_start_date = start_of_month
-        default_end_date = today
-        
-        # Date inputs
-        start_date = st.sidebar.date_input("Fecha inicio", default_start_date, key="dash_start_date")
-        end_date = st.sidebar.date_input("Fecha fin", default_end_date, key="dash_end_date")
-        
-        # Section filter
-        try:
-            agents_df = utils.get_all_agents()
-            if not agents_df.empty:
-                # Get unique sections
-                sections = sorted(agents_df['seccion'].unique().tolist())
-                sections = [s for s in sections if s]  # Remove empty values
-                
-                selected_sections = st.sidebar.multiselect(
-                    "Secciones",
-                    options=sections,
-                    default=[],
-                    key="dash_sections"
-                )
-            else:
-                selected_sections = []
-        except:
+    # Sidebar filters for all views
+    st.sidebar.header("Filtros")
+    
+    # Date range filter
+    st.sidebar.subheader("Rango de fechas")
+    
+    # Calculate default date ranges (start of current year)
+    today = datetime.now()
+    start_of_year = datetime(today.year, 1, 1)
+    
+    # Default start and end dates
+    default_start_date = start_of_year
+    default_end_date = today
+    
+    # Date inputs
+    start_date = st.sidebar.date_input("Fecha inicio", default_start_date, key="start_date")
+    end_date = st.sidebar.date_input("Fecha fin", default_end_date, key="end_date")
+    
+    # Course filter
+    try:
+        courses_data = utils.get_all_courses(include_hidden=False)
+        if not courses_data.empty:
+            course_options = [("", "Todos los cursos")]
+            for _, course in courses_data.iterrows():
+                course_options.append((course['id'], course['nombre']))
+            
+            selected_course = st.sidebar.selectbox(
+                "Curso",
+                options=[c[0] for c in course_options],
+                format_func=lambda x: next((c[1] for c in course_options if c[0] == x), x),
+                key="course"
+            )
+        else:
+            selected_course = ""
+    except Exception as e:
+        selected_course = ""
+        st.sidebar.warning(f"No se pudieron cargar los cursos: {str(e)}")
+    
+    # Section filter
+    try:
+        agents_df = utils.get_all_agents()
+        if not agents_df.empty:
+            # Get unique sections
+            sections = sorted(agents_df['seccion'].unique().tolist())
+            sections = [s for s in sections if s]  # Remove empty values
+            
+            selected_sections = st.sidebar.multiselect(
+                "Secciones",
+                options=sections,
+                default=[],
+                key="sections"
+            )
+        else:
             selected_sections = []
-            st.sidebar.warning("No se pudieron cargar las secciones")
-        
-        # Group filter
-        try:
-            if not agents_df.empty:
-                # Get unique groups
-                groups = sorted(agents_df['grupo'].unique().tolist())
-                groups = [g for g in groups if g]  # Remove empty values
-                
-                selected_groups = st.sidebar.multiselect(
-                    "Grupos",
-                    options=groups,
-                    default=[],
-                    key="dash_groups"
-                )
-            else:
-                selected_groups = []
-        except:
-            selected_groups = []
-            st.sidebar.warning("No se pudieron cargar los grupos")
-        
-        # Agents filter - new filter
-        try:
-            all_agents = utils.get_all_agents()
-            if not all_agents.empty:
-                # Get agent names in format NIP - Nombre Apellido
-                agent_options = []
-                for _, agent in all_agents.iterrows():
-                    agent_name = f"{agent['nip']} - {agent['nombre']} {agent['apellido1']}"
-                    agent_options.append((agent['nip'], agent_name))
-                
-                # Sort by name
-                agent_options.sort(key=lambda x: x[1])
-                
-                agent_nips = [a[0] for a in agent_options]
-                agent_labels = [a[1] for a in agent_options]
-                
-                selected_agents = st.sidebar.multiselect(
-                    "Agentes",
-                    options=agent_nips,
-                    default=[],
-                    format_func=lambda nip: next((label for n, label in zip(agent_nips, agent_labels) if n == nip), nip),
-                    key="dash_agents"
-                )
-            else:
-                selected_agents = []
-        except:
+    except Exception as e:
+        selected_sections = []
+        st.sidebar.warning(f"No se pudieron cargar las secciones: {str(e)}")
+    
+    # Agents filter
+    try:
+        all_agents = utils.get_all_agents()
+        if not all_agents.empty:
+            # Get agent names in format NIP - Nombre Apellido
+            agent_options = []
+            for _, agent in all_agents.iterrows():
+                agent_name = f"{agent['nip']} - {agent['nombre']} {agent['apellido1']}"
+                agent_options.append((agent['nip'], agent_name))
+            
+            # Sort by name
+            agent_options.sort(key=lambda x: x[1])
+            
+            agent_nips = [a[0] for a in agent_options]
+            agent_labels = [a[1] for a in agent_options]
+            
+            selected_agents = st.sidebar.multiselect(
+                "Agentes",
+                options=agent_nips,
+                default=[],
+                format_func=lambda nip: next((label for n, label in zip(agent_nips, agent_labels) if n == nip), nip),
+                key="agents"
+            )
+        else:
             selected_agents = []
-            st.sidebar.warning("No se pudieron cargar los agentes")
+    except Exception as e:
+        selected_agents = []
+        st.sidebar.warning(f"No se pudieron cargar los agentes: {str(e)}")
         
         # Apply filters and load data
         try:
@@ -137,12 +136,9 @@ def show_statistics():
             # Get agent details
             agents_df = utils.get_all_agents()
             
-            # Apply section and group filters to agents
+            # Apply section filter to agents
             if selected_sections:
                 agents_df = agents_df[agents_df['seccion'].isin(selected_sections)]
-            
-            if selected_groups:
-                agents_df = agents_df[agents_df['grupo'].isin(selected_groups)]
             
             # Apply agent filter if specified
             if selected_agents:
@@ -416,104 +412,21 @@ def show_statistics():
     
     # Parte 2: Vista Dinámica con DataFrames
     with tab2:
-        st.header("Vista Dinámica de Actividades por Agente")
-        st.write("Utiliza los filtros para generar un informe personalizado de la actividad de los agentes.")
+        st.header("Vista Dinámica")
+        st.write("Visualiza un informe detallado de la actividad de los agentes según los filtros seleccionados.")
         
-        # Añadir filtros para la vista dinámica
-        st.subheader("Filtros")
-        
-        # Crear una disposición de dos columnas para los filtros
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Filtro de fecha
-            dyn_start_date = st.date_input("Fecha inicio", datetime.now() - timedelta(days=30), key="dyn_start_date")
-            dyn_end_date = st.date_input("Fecha fin", datetime.now(), key="dyn_end_date")
-            
-            # Filtro de cursos
-            try:
-                courses_data = utils.get_all_courses(include_hidden=False)
-                if not courses_data.empty:
-                    course_options = [("", "Todos los cursos")]
-                    for _, course in courses_data.iterrows():
-                        course_options.append((course['id'], course['nombre']))
-                    
-                    selected_course = st.selectbox(
-                        "Curso",
-                        options=[c[0] for c in course_options],
-                        format_func=lambda x: next((c[1] for c in course_options if c[0] == x), x),
-                        key="dyn_course"
-                    )
-                else:
-                    selected_course = ""
-                    st.warning("No hay cursos disponibles")
-            except Exception as e:
-                selected_course = ""
-                st.error(f"Error al cargar cursos: {str(e)}")
-        
-        with col2:
-            # Filtro de secciones
-            try:
-                agents_data = utils.get_all_agents()
-                if not agents_data.empty:
-                    # Secciones únicas
-                    sections = sorted(agents_data['seccion'].unique().tolist())
-                    sections = [s for s in sections if s]  # Eliminar valores vacíos
-                    
-                    dyn_selected_sections = st.multiselect(
-                        "Secciones",
-                        options=sections,
-                        default=[],
-                        key="dyn_sections"
-                    )
-                else:
-                    dyn_selected_sections = []
-                    st.warning("No hay secciones disponibles")
-            except Exception as e:
-                dyn_selected_sections = []
-                st.error(f"Error al cargar secciones: {str(e)}")
-            
-            # Filtro de agentes
-            try:
-                if not agents_data.empty:
-                    # Obtener nombres de agentes en formato NIP - Nombre Apellido
-                    agent_options = []
-                    for _, agent in agents_data.iterrows():
-                        agent_name = f"{agent['nip']} - {agent['nombre']} {agent['apellido1']}"
-                        agent_options.append((agent['nip'], agent_name))
-                    
-                    # Ordenar por nombre
-                    agent_options.sort(key=lambda x: x[1])
-                    
-                    dyn_agent_nips = [a[0] for a in agent_options]
-                    dyn_agent_labels = [a[1] for a in agent_options]
-                    
-                    dyn_selected_agents = st.multiselect(
-                        "Agentes",
-                        options=dyn_agent_nips,
-                        default=[],
-                        format_func=lambda nip: next((label for n, label in zip(dyn_agent_nips, dyn_agent_labels) if n == nip), nip),
-                        key="dyn_agents"
-                    )
-                else:
-                    dyn_selected_agents = []
-                    st.warning("No hay agentes disponibles")
-            except Exception as e:
-                dyn_selected_agents = []
-                st.error(f"Error al cargar agentes: {str(e)}")
-        
-        # Botón para generar el informe
+        # Botón para generar el informe usando los filtros del sidebar
         generate_report = st.button("Generar Informe", type="primary")
         
         if generate_report:
             with st.spinner("Generando informe..."):
-                # Obtener los datos usando la función SQL
+                # Obtener los datos usando la función y los filtros compartidos
                 stats_df = utils.get_agents_activity_stats(
-                    start_date=dyn_start_date,
-                    end_date=dyn_end_date,
+                    start_date=start_date,
+                    end_date=end_date,
                     curso_id=selected_course if selected_course else None,
-                    secciones=dyn_selected_sections if dyn_selected_sections else None,
-                    agentes=dyn_selected_agents if dyn_selected_agents else None
+                    secciones=selected_sections if selected_sections else None,
+                    agentes=selected_agents if selected_agents else None
                 )
                 
                 if not stats_df.empty:
