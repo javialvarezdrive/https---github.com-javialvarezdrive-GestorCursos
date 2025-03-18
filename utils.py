@@ -14,24 +14,10 @@ from cryptography.fernet import Fernet
 # para persistencia entre sesiones
 
 # Archivo para guardar credenciales
-SESSION_FILE = '.session'
-
-# Clave para encriptar (generada dinámicamente o fija para desarrollo)
-def get_encryption_key():
-    """Obtiene una clave de encriptación, generándola si no existe"""
-    key_file = '.key'
-    if os.path.exists(key_file):
-        with open(key_file, 'rb') as f:
-            return f.read()
-    else:
-        # Generar una nueva clave
-        key = Fernet.generate_key()
-        with open(key_file, 'wb') as f:
-            f.write(key)
-        return key
+SESSION_FILE = '.streamlit/saved_session.json'
 
 def save_credentials(nip, password, remember=False):
-    """Guarda las credenciales encriptadas en un archivo si remember=True"""
+    """Guarda las credenciales en un archivo JSON si remember=True"""
     if not remember:
         # Si no se quiere recordar, borrar cualquier sesión guardada
         if os.path.exists(SESSION_FILE):
@@ -39,53 +25,48 @@ def save_credentials(nip, password, remember=False):
         return False
     
     try:
-        # Crear objeto de encriptación
-        key = get_encryption_key()
-        fernet = Fernet(key)
-        
         # Datos a guardar
         import time
+        import json
+        import base64
+        
+        # Simple "encriptación" básica (base64)
+        # En un entorno real deberíamos usar encriptación más fuerte
+        # Para un entorno de desarrollo esto es suficiente
+        encoded_password = base64.b64encode(password.encode()).decode()
+        
         data = {
             'nip': nip,
-            'password': password,
+            'password': encoded_password,
             'timestamp': int(time.time())
         }
         
-        # Serializar y encriptar
-        serialized = pickle.dumps(data)
-        encrypted = fernet.encrypt(serialized)
-        
-        # Guardar en archivo
-        with open(SESSION_FILE, 'wb') as f:
-            f.write(encrypted)
+        # Guardar en archivo JSON
+        with open(SESSION_FILE, 'w') as f:
+            json.dump(data, f)
             
+        st.success("Sesión guardada. La próxima vez iniciarás sesión automáticamente.")
         return True
     except Exception as e:
         st.error(f"Error guardando credenciales: {str(e)}")
         return False
 
 def load_credentials():
-    """Carga credenciales encriptadas desde archivo si existen"""
+    """Carga credenciales desde archivo JSON si existen"""
     if not os.path.exists(SESSION_FILE):
         return None
     
     try:
-        # Leer datos encriptados
-        with open(SESSION_FILE, 'rb') as f:
-            encrypted = f.read()
+        # Leer datos del archivo JSON
+        import json
+        import base64
         
-        # Desencriptar
-        key = get_encryption_key()
-        fernet = Fernet(key)
-        serialized = fernet.decrypt(encrypted)
+        with open(SESSION_FILE, 'r') as f:
+            data = json.load(f)
         
-        # Deserializar
-        data = pickle.loads(serialized)
-        
-        # Verificar expiración (opcional, por ahora no expira)
-        # import time
-        # if int(time.time()) - data['timestamp'] > 604800:  # 7 días
-        #    return None
+        # Decodificar la contraseña
+        if 'password' in data:
+            data['password'] = base64.b64decode(data['password'].encode()).decode()
         
         return data
     except Exception as e:

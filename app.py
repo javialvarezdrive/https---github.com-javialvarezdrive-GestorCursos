@@ -65,32 +65,38 @@ def main():
     
     # Intentar autenticar con credenciales guardadas
     if not st.session_state.get("authenticated", False):
-        saved_credentials = utils.load_credentials()
-        if saved_credentials and 'nip' in saved_credentials and 'password' in saved_credentials:
-            # Intentar iniciar sesión con las credenciales guardadas
-            nip = saved_credentials['nip']
-            password = saved_credentials['password']
-            success, result = utils.verify_credentials(nip, password)
-            if success:
-                # Autenticación exitosa
-                user = result
-                st.session_state["authenticated"] = True
-                st.session_state["user_nip"] = nip  # Guardamos el NIP como identificador
-                st.session_state["user_data"] = user  # Guardamos todos los datos del usuario
-                
-                # Obtener el nombre del agente para mostrarlo en la interfaz
-                try:
-                    agent_name = utils.get_agent_name(nip)
-                    if agent_name != "Agente no encontrado" and agent_name != "Error":
-                        st.session_state.agent_name = agent_name
-                    else:
+        with st.spinner("Comprobando sesión guardada..."):
+            saved_credentials = utils.load_credentials()
+            if saved_credentials and 'nip' in saved_credentials and 'password' in saved_credentials:
+                # Intentar iniciar sesión con las credenciales guardadas
+                nip = saved_credentials['nip']
+                password = saved_credentials['password']
+                success, result = utils.verify_credentials(nip, password)
+                if success:
+                    # Autenticación exitosa
+                    user = result
+                    st.session_state["authenticated"] = True
+                    st.session_state["user_nip"] = nip  # Guardamos el NIP como identificador
+                    st.session_state["user_data"] = user  # Guardamos todos los datos del usuario
+                    
+                    # Obtener el nombre del agente para mostrarlo en la interfaz
+                    try:
+                        agent_name = utils.get_agent_name(nip)
+                        if agent_name != "Agente no encontrado" and agent_name != "Error":
+                            st.session_state.agent_name = agent_name
+                        else:
+                            st.session_state.agent_name = f"Agente {nip}"
+                    except:
                         st.session_state.agent_name = f"Agente {nip}"
-                except:
-                    st.session_state.agent_name = f"Agente {nip}"
-                
-                # Generate a new session ID when logged in
-                st.session_state.session_id = str(int(time.time()))
-                st.info("Sesión restaurada automáticamente")
+                    
+                    # Generate a new session ID when logged in
+                    st.session_state.session_id = str(int(time.time()))
+                    
+                    # Mensaje de éxito y recargar la página
+                    st.success("Sesión restaurada automáticamente")
+                    # Guardar la sesión en la cookie para persistencia web
+                    utils.save_session_to_cookie()
+                    st.rerun()
         
     # Intentar cargar sesión desde cookies si existe
     if not st.session_state.get("authenticated", False):
