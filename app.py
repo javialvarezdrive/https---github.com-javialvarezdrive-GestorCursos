@@ -18,6 +18,8 @@ st.set_page_config(
 
 # Initialize all session state variables
 def init_session_state():
+    if 'dark_mode' not in st.session_state:
+        st.session_state.dark_mode = False
     # Generate a persistent session ID
     if 'session_id' not in st.session_state:
         # Generate a unique session ID for this session
@@ -178,6 +180,20 @@ def main():
                 st.rerun()
     
     else:
+        # Add theme toggle in sidebar
+        with st.sidebar:
+            if st.toggle("Modo Oscuro", key='dark_mode'):
+                st.markdown("""
+                    <style>
+                        [data-testid="stSidebar"] {
+                            background-color: #262730;
+                        }
+                    </style>
+                """, unsafe_allow_html=True)
+                st.theme(**config.DARK_THEME)
+            else:
+                st.theme(**config.LIGHT_THEME)
+                
         # Show the main page after authentication
         # Usamos el nombre del agente para la bienvenida si está disponible
         if 'agent_name' in st.session_state:

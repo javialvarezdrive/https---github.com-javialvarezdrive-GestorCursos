@@ -11,6 +11,21 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # App configuration
 APP_NAME = "Policía Local de Vigo - Gestión de Agentes"
 
+# Theme configurations
+LIGHT_THEME = {
+    "primaryColor": "#0066cc",
+    "backgroundColor": "#ffffff",
+    "secondaryBackgroundColor": "#f0f2f6",
+    "textColor": "#262730"
+}
+
+DARK_THEME = {
+    "primaryColor": "#1988ff",
+    "backgroundColor": "#0e1117",
+    "secondaryBackgroundColor": "#262730",
+    "textColor": "#fafafa"
+}
+
 # Table names
 AGENTS_TABLE = "agents"
 COURSES_TABLE = "courses"
