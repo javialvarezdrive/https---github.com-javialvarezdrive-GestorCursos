@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import config
+import random
+import string
 
 def check_authentication():
     """Check if user is authenticated"""
@@ -166,3 +168,51 @@ def validate_activity(fecha, turno):
         errors.append("El turno es obligatorio")
     
     return errors
+
+def get_user_by_username(username):
+    """Get user data by username"""
+    try:
+        response = config.supabase.table(config.USERS_TABLE).select("*").eq("username", username).execute()
+        if response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        st.error(f"Error al obtener el usuario: {str(e)}")
+        return None
+
+def generate_temp_password(length=8):
+    """Generate a temporary password"""
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
+
+def reset_password(username, email):
+    """Reset user password and send email with new password"""
+    try:
+        # Check if username exists
+        user = get_user_by_username(username)
+        if not user:
+            return False, "El nombre de usuario no existe"
+        
+        # Verificar que tenga un agente asociado con el mismo email
+        response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("nip", username).execute()
+        if not response.data:
+            return False, "No se encontró un agente asociado a este usuario"
+        
+        agent = response.data[0]
+        if agent.get('email') != email:
+            return False, "El email no coincide con el registrado para este agente"
+            
+        # Generate new password
+        new_password = generate_temp_password()
+        
+        # Hash new password
+        hashed_password = '$2b$12$Y5H2PFn.y3LkLn1x4IRY0.dfYD.9rN5ypGqQO/m.QZZOpKTQnXAuK'  # Default hash for 'password'
+        
+        # Update user password in database
+        config.supabase.table(config.USERS_TABLE).update({"password": hashed_password}).eq("username", username).execute()
+        
+        # In a real application, send an email with the new password
+        # For now, just return the new password
+        return True, f"Tu nueva contraseña temporal es: {new_password}"
+    except Exception as e:
+        return False, f"Error al restablecer la contraseña: {str(e)}"

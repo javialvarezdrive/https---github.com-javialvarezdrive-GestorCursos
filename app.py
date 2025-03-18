@@ -79,6 +79,41 @@ def setup_authentication():
                 else:
                     st.error("Usuario no encontrado")
         
+        # Password recovery section
+        st.markdown("---")
+        st.subheader("¿Olvidaste tu contraseña?")
+        
+        # Check if we're in password recovery mode
+        if "password_recovery" not in st.session_state:
+            st.session_state.password_recovery = False
+            
+        if not st.session_state.password_recovery:
+            if st.button("Recuperar contraseña"):
+                st.session_state.password_recovery = True
+                st.rerun()
+        else:
+            # Password recovery form
+            with st.form("recovery_form"):
+                recovery_username = st.text_input("NIP (Número de Identificación Personal)")
+                recovery_email = st.text_input("Email registrado")
+                
+                recovery_submitted = st.form_submit_button("Enviar solicitud")
+                
+                if recovery_submitted:
+                    if recovery_username and recovery_email:
+                        success, message = utils.reset_password(recovery_username, recovery_email)
+                        if success:
+                            st.success(message)
+                            # En un entorno real, aquí solo se mostraría un mensaje de que se ha enviado un email
+                        else:
+                            st.error(message)
+                    else:
+                        st.error("Por favor, completa todos los campos")
+            
+            if st.button("Volver al inicio de sesión"):
+                st.session_state.password_recovery = False
+                st.rerun()
+        
     except Exception as e:
         st.error(f"Error de autenticación: {str(e)}")
     
