@@ -106,13 +106,9 @@ with tab_lista:
         
         # Process each activity to get full information
         for idx, activity in activities_df.iterrows():
-            # Get course name
+            # Get course name using the utility function
             try:
-                curso_nombre = "Sin curso"
-                if activity['curso_id'] is not None:
-                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
-                    if curso_response.data and len(curso_response.data) > 0:
-                        curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
+                curso_nombre = utils.get_course_name(activity['curso_id'])
             except Exception as e:
                 curso_nombre = "Sin curso"
             
@@ -380,13 +376,9 @@ with tab_editar:
         # Create activity options for selection (same as in Tab 3)
         activity_options = []
         for _, activity in activities_df.iterrows():
-            # Get course name
+            # Get course name using the utility function
             try:
-                curso_nombre = "Sin curso"
-                if activity['curso_id'] is not None:
-                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
-                    if curso_response.data and len(curso_response.data) > 0:
-                        curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
+                curso_nombre = utils.get_course_name(activity['curso_id'])
             except Exception as e:
                 st.error(f"Error al obtener el curso: {str(e)}")
                 curso_nombre = "Sin curso"
