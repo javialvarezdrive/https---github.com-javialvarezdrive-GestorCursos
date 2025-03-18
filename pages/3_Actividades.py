@@ -21,14 +21,11 @@ if "activities_df" not in st.session_state:
 # Page title
 st.title("🗓️ Gestión de Actividades")
 
-# Import the calendar component
-from streamlit_calendar import calendar
-
 # Create tabs
-tab1, tab2, tab3, tab4 = st.tabs(["Próximas Actividades", "Vista Calendario", "Añadir Actividad", "Editar Actividad"])
+tab_lista, tab_anadir, tab_editar = st.tabs(["Próximas Actividades", "Añadir Actividad", "Editar Actividad"])
 
-# Tab 1: Próximas Actividades
-with tab1:
+# Tab: Próximas Actividades
+with tab_lista:
     st.subheader("Próximas Actividades")
     
     # Usar el DataFrame almacenado en session_state
@@ -218,105 +215,8 @@ with tab1:
     else:
         st.warning("No hay actividades disponibles en la base de datos.")
 
-# Tab 2: Vista Calendario
-with tab2:
-    st.subheader("Calendario de Actividades")
-    
-    # Preparar datos para el calendario
-    if not st.session_state.activities_df.empty:
-        calendar_events = []
-        
-        for _, activity in st.session_state.activities_df.iterrows():
-            # Get course name
-            try:
-                curso_nombre = "Sin curso"
-                if activity['curso_id'] is not None:
-                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
-                    if curso_response.data and len(curso_response.data) > 0:
-                        curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
-            except Exception as e:
-                st.error(f"Error al obtener el curso para el calendario: {str(e)}")
-                curso_nombre = "Sin curso"
-            
-            # Get monitor name
-            try:
-                monitor_name = utils.get_agent_name(activity['monitor_nip']) if activity['monitor_nip'] else "Sin monitor"
-            except:
-                monitor_name = "Error"
-            
-            # Crear evento para el calendario
-            event = {
-                "id": str(activity['id']),
-                "title": f"{curso_nombre} - {activity['turno']}",
-                "start": activity['fecha'],
-                "end": activity['fecha'],
-                "extendedProps": {
-                    "monitor": monitor_name,
-                    "turno": activity['turno']
-                }
-            }
-            
-            # Asignar color según el turno
-            if activity['turno'] == "Mañana":
-                event["backgroundColor"] = "#4285F4"  # Azul para turno de mañana
-            elif activity['turno'] == "Tarde":
-                event["backgroundColor"] = "#FBBC05"  # Amarillo para turno de tarde
-            elif activity['turno'] == "Noche":
-                event["backgroundColor"] = "#34A853"  # Verde para turno de noche
-            
-            calendar_events.append(event)
-        
-        # Configuración del calendario
-        calendar_options = {
-            "headerToolbar": {
-                "left": "today prev,next",
-                "center": "title",
-                "right": "dayGridMonth,timeGridWeek,timeGridDay"
-            },
-            "initialView": "dayGridMonth",
-            "selectable": True,
-            "editable": False,
-            "locale": "es",
-            "firstDay": 1,  # Empieza semana en lunes
-            "eventTimeFormat": {
-                "hour": "2-digit",
-                "minute": "2-digit",
-                "meridiem": False,
-                "hour12": False
-            },
-            "buttonText": {
-                "today": "Hoy",
-                "month": "Mes",
-                "week": "Semana",
-                "day": "Día"
-            },
-            "eventContent": """
-                function(info) {
-                    var turno = info.event.extendedProps.turno;
-                    var monitor = info.event.extendedProps.monitor;
-                    
-                    return {
-                        html: '<div class="fc-event-title">' + info.event.title + '</div>' +
-                              '<div class="fc-event-description">' + 
-                              '<small>Monitor: ' + monitor + '</small>' +
-                              '</div>'
-                    };
-                }
-            """
-        }
-        
-        # Eventos
-        calendar_events_schema = {
-            "events": calendar_events
-        }
-        
-        # Renderizar calendario
-        calendar(events=calendar_events_schema, options=calendar_options, key="activity_calendar")
-    else:
-        st.warning("No hay actividades disponibles para mostrar en el calendario.")
-
-# Tab 3: Add Activity
-with tab3:
+# Tab: Añadir Actividad
+with tab_anadir:
     st.subheader("Añadir Nueva Actividad")
     
     # Obtener información del usuario para asignar como monitor predeterminado
@@ -422,8 +322,8 @@ with tab3:
 
 
 
-# Tab 4: Edit Activity
-with tab4:
+# Tab: Edit Activity
+with tab_editar:
     st.subheader("Editar Actividad Existente")
     
     # Usar el DataFrame almacenado en session_state
