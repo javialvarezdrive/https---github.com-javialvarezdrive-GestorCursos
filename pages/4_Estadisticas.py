@@ -478,10 +478,12 @@ def show_statistics():
                 
                 # Agents filter
                 try:
-                    if not dyn_agents_df.empty:
+                    # Obtener todos los agentes (independientemente del resultado de secciones)
+                    dyn_all_agents = utils.get_all_agents()
+                    if not dyn_all_agents.empty:
                         # Get agent names in format NIP - Nombre Apellido
                         dyn_agent_options = []
-                        for _, agent in dyn_agents_df.iterrows():
+                        for _, agent in dyn_all_agents.iterrows():
                             dyn_agent_name = f"{agent['nip']} - {agent['nombre']} {agent['apellido1']}"
                             dyn_agent_options.append((agent['nip'], dyn_agent_name))
                         
