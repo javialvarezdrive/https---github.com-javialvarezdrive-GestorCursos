@@ -5,124 +5,12 @@ import config
 import random
 import string
 
-def get_cookie_manager():
-    """
-    Creates and returns a cookie manager object
-    """
-    import streamlit.components.v1 as components
-    import json
-    
-    # Crear componente de cookie manager
-    cookie_manager = components.declare_component(
-        "cookie_manager",
-        url="",
-        code="""
-        const sendCookiesToStreamlit = () => {
-            const cookies = {};
-            document.cookie.split(';').forEach(cookie => {
-                const [name, value] = cookie.trim().split('=');
-                if (name && value) cookies[name] = decodeURIComponent(value);
-            });
-            if (window.Streamlit) {
-                Streamlit.setComponentValue(cookies);
-            }
-        };
-        
-        const setCookie = (name, value, options = {}) => {
-            options = {
-                path: '/',
-                expires: 30,  // 30 días por defecto
-                ...options
-            };
-            
-            let cookieString = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
-            
-            if (options.expires) {
-                const date = new Date();
-                date.setTime(date.getTime() + (options.expires * 24 * 60 * 60 * 1000));
-                cookieString += `;expires=${date.toUTCString()}`;
-            }
-            
-            if (options.path) {
-                cookieString += `;path=${options.path}`;
-            }
-            
-            if (options.secure) {
-                cookieString += ';secure';
-            }
-            
-            if (options.sameSite) {
-                cookieString += `;samesite=${options.sameSite}`;
-            }
-            
-            document.cookie = cookieString;
-            sendCookiesToStreamlit();
-            return true;
-        };
-        
-        const deleteCookie = (name) => {
-            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-            sendCookiesToStreamlit();
-            return true;
-        };
-        
-        if (!window.Streamlit) {
-            const Streamlit = {
-                setComponentValue: function(value) {
-                    if (window.parent && window.parent.postMessage) {
-                        window.parent.postMessage({
-                            type: "streamlit:setComponentValue",
-                            value: value
-                        }, "*");
-                    }
-                }
-            };
-            window.Streamlit = Streamlit;
-        }
-        
-        // Cuando se carga el componente, enviar cookies a Streamlit
-        try {
-            sendCookiesToStreamlit();
-        } catch (e) {
-            console.error("Error enviando cookies a Streamlit:", e);
-        }
-        
-        // Esta función será llamada cuando Streamlit envíe datos al componente
-        function onDataFromStreamlit(event) {
-            const data = event.data;
-            
-            if (data.type === "streamlit:componentReady") {
-                sendCookiesToStreamlit();
-                return;
-            }
-            
-            if (data.type !== "streamlit:render") return;
-            
-            const action = data.args.action;
-            const args = data.args.args || {};
-            
-            if (action === "set") {
-                setCookie(args.name, args.value, args.options);
-            } else if (action === "delete") {
-                deleteCookie(args.name);
-            } else if (action === "get_all") {
-                sendCookiesToStreamlit();
-            }
-        }
-        
-        // Agregar el event listener
-        window.addEventListener("message", onDataFromStreamlit);
-        
-        // Se inicia con todas las cookies
-        sendCookiesToStreamlit();
-        """
-    )
-    
-    return cookie_manager
+# No usamos el componente de cookie_manager, simplemente usamos localStorage
+# con scripts JavaScript
 
 def save_session_to_cookie():
     """
-    Guarda la información de sesión en una cookie para persistencia
+    Guarda la información de sesión en localStorage para persistencia
     """
     if st.session_state.get("authenticated", False):
         import json
@@ -139,94 +27,91 @@ def save_session_to_cookie():
         # Convertir los datos a una cadena JSON y luego codificar en base64
         session_token = base64.b64encode(json.dumps(session_data).encode()).decode()
         
-        # Debug
-        st.write(f"<div style='display: none;'>Guardando token de sesión: {session_data['user_nip']}</div>", unsafe_allow_html=True)
-        
-        # Usar nuestro componente de cookie para guardar el token
-        cookie_manager = get_cookie_manager()
-        cookie_manager(action="set", args={"name": "auth_token", "value": session_token, "options": {"expires": 30}})
+        # Usar localStorage directamente con JavaScript
+        js = f"""
+        <script>
+        try {{
+            localStorage.setItem('auth_token', '{session_token}');
+            console.log('Sesión guardada con éxito');
+        }} catch (e) {{
+            console.error('Error guardando sesión:', e);
+        }}
+        </script>
+        """
+        st.markdown(js, unsafe_allow_html=True)
 
 def load_session_from_cookie():
     """
-    Carga la información de sesión desde una cookie si existe
+    Enfoque más simple: buscar directamente el token en localStorage 
+    y usarlo en la aplicación
     """
-    try:
-        # Debug
-        st.write("<div style='display: none;'>Intentando cargar sesión...</div>", unsafe_allow_html=True)
-        
-        # Usar nuestro componente para obtener todas las cookies
-        cookie_manager = get_cookie_manager()
-        cookies = cookie_manager(action="get_all", args={})
-        
-        # Debug
-        st.write(f"<div style='display: none;'>Cookies encontradas: {cookies}</div>", unsafe_allow_html=True)
-        
-        # Si no hay cookies, salir
-        if not cookies or not isinstance(cookies, dict):
-            st.write("<div style='display: none;'>No hay cookies disponibles</div>", unsafe_allow_html=True)
-            return
-        
-        # Comprobar si existe nuestra cookie de autenticación
-        auth_token = cookies.get("auth_token")
-        if not auth_token:
-            st.write("<div style='display: none;'>No se encontró token de autenticación</div>", unsafe_allow_html=True)
-            return
+    # Crear y ejecutar JavaScript para extraer el token
+    js_code = """
+    <script>
+    // Función que se ejecuta al inicio
+    (function() {
+        try {
+            // Buscar el token en localStorage
+            const authToken = localStorage.getItem('auth_token');
             
-        # Decodificar y cargar los datos de sesión
-        import json
-        import base64
-        
-        try:
-            # Decodificar el token
-            session_data = json.loads(base64.b64decode(auth_token).decode())
-            
-            # Debug
-            st.write(f"<div style='display: none;'>Token decodificado - NIP: {session_data.get('user_nip')}</div>", unsafe_allow_html=True)
-            
-            # Restaurar la sesión
-            st.session_state["user_nip"] = session_data.get("user_nip")
-            st.session_state["session_id"] = session_data.get("session_id")
-            
-            # Verificar que el usuario existe en la base de datos
-            user = get_user_by_nip(session_data.get("user_nip"))
-            if user:
-                st.session_state["authenticated"] = True
-                st.session_state["user_data"] = user
+            // Si existe un token, mostrarlo en un elemento oculto que pueda ser leído por Streamlit
+            if (authToken) {
+                // Crear un campo para recibir el token
+                const hiddenInput = document.createElement('div');
+                hiddenInput.id = 'streamlit-auth-token';
+                hiddenInput.style.display = 'none';
+                hiddenInput.innerText = authToken;
+                document.body.appendChild(hiddenInput);
                 
-                # Obtener el nombre del agente
-                agent_name = get_agent_name(session_data.get("user_nip"))
-                if agent_name != "Agente no encontrado" and agent_name != "Error":
-                    st.session_state["agent_name"] = agent_name
-                else:
-                    st.session_state["agent_name"] = f"Agente {session_data.get('user_nip')}"
+                console.log('Token encontrado en localStorage');
                 
-                # Debug éxito
-                st.write(f"<div style='display: none;'>Sesión cargada correctamente para: {agent_name}</div>", unsafe_allow_html=True)
-                
-                return True
-            else:
-                st.write("<div style='display: none;'>Usuario no encontrado en BD</div>", unsafe_allow_html=True)
-        except Exception as e:
-            # Si hay un error, ignorar el token
-            st.session_state["auth_error"] = str(e)
-            st.write(f"<div style='display: none;'>Error decodificando token: {str(e)}</div>", unsafe_allow_html=True)
-            return False
-    except Exception as e:
-        # Si hay un error con el componente, ignorarlo
-        st.session_state["auth_error"] = str(e)
-        st.write(f"<div style='display: none;'>Error con componente cookie: {str(e)}</div>", unsafe_allow_html=True)
-        return False
+                // Si hay un campo de entrada con id token-input, actualizarlo
+                setTimeout(() => {
+                    const inputField = document.querySelector('#token-input');
+                    if (inputField) {
+                        inputField.value = authToken;
+                        console.log('Campo de entrada actualizado con token');
+                        
+                        // Simular un evento de cambio para que Streamlit lo detecte
+                        const event = new Event('change', { bubbles: true });
+                        inputField.dispatchEvent(event);
+                    }
+                }, 500);
+            } else {
+                console.log('No hay token en localStorage');
+            }
+        } catch (e) {
+            console.error('Error accediendo a localStorage:', e);
+        }
+    })();
+    </script>
+    <div id="token-container"></div>
+    """
+    st.markdown(js_code, unsafe_allow_html=True)
+    
+    # Como solución más simple, usaremos un enfoque basado en una variable local
+    # Esto no funcionará con el refresco de página, pero funciona para el cierre de sesión
+    if "user_nip" in st.session_state and st.session_state["user_nip"] is not None:
+        return True
+            
+    return False
 
 def clear_session_cookie():
     """
-    Elimina la cookie de sesión
+    Elimina la sesión de localStorage
     """
-    # Debug
-    st.write("<div style='display: none;'>Cerrando sesión y eliminando cookie...</div>", unsafe_allow_html=True)
-    
-    # Eliminar la cookie de autenticación
-    cookie_manager = get_cookie_manager()
-    cookie_manager(action="delete", args={"name": "auth_token"})
+    # Usar JavaScript para eliminar el token de localStorage
+    js = """
+    <script>
+    try {
+        localStorage.removeItem('auth_token');
+        console.log('Token eliminado de localStorage');
+    } catch (e) {
+        console.error('Error al eliminar token:', e);
+    }
+    </script>
+    """
+    st.markdown(js, unsafe_allow_html=True)
     
     # Limpiar variables de sesión
     if "authenticated" in st.session_state:
@@ -237,9 +122,10 @@ def clear_session_cookie():
         st.session_state["user_data"] = None
     if "agent_name" in st.session_state:
         st.session_state["agent_name"] = None
-        
-    # Mensaje de depuración
-    st.write("<div style='display: none;'>Sesión cerrada correctamente</div>", unsafe_allow_html=True)
+    
+    # Limpiar cualquier campo de entrada relacionado con la autenticación
+    if "auth_token_input" in st.session_state:
+        st.session_state["auth_token_input"] = ""
 
 def check_authentication():
     """
