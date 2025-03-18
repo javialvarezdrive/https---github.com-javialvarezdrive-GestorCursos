@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 import config
 import utils
+import pdf_generator
 
 # Check authentication
 utils.check_authentication()
@@ -172,7 +173,8 @@ with tab_lista:
                     'Turno': [activity['turno']],
                     'Curso': [curso_nombre],
                     'Monitor': [monitor_name],
-                    'Participantes': [participants_str]
+                    'Participantes': [participants_str],
+                    'id': [activity['id']]  # Guardar ID para generar PDF
                 })], ignore_index=True)
         
         # Visualización de participantes más clara
@@ -203,6 +205,28 @@ with tab_lista:
                         for i, participant in enumerate(participant_list):
                             with cols[i % 3]:
                                 st.markdown(f"**{i+1}.** {participant}")
+                        
+                        # Obtener el ID de la actividad seleccionada para generar PDF
+                        activity_id = display_df.iloc[selected_idx]['id']
+                        
+                        # Generar PDF
+                        pdf_bytes = pdf_generator.generate_activity_report(activity_id)
+                        
+                        if pdf_bytes:
+                            # Crear un enlace de descarga para el PDF
+                            fecha = display_df.iloc[selected_idx]['Fecha']
+                            curso = display_df.iloc[selected_idx]['Curso']
+                            filename = f"actividad_{fecha}_{curso}.pdf".replace(" ", "_").replace("/", "-")
+                            
+                            pdf_link = pdf_generator.get_pdf_download_link(
+                                pdf_bytes, 
+                                filename=filename,
+                                text="📄 Descargar Informe PDF"
+                            )
+                            
+                            st.markdown(pdf_link, unsafe_allow_html=True)
+                        else:
+                            st.error("No se pudo generar el PDF. Contacta al administrador.")
                     else:
                         st.info("Esta actividad no tiene participantes asignados.")
             
