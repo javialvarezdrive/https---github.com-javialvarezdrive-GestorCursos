@@ -63,6 +63,7 @@ def sign_in_with_nip(nip, password):
         if user.get('password') == password:
             # Crear una sesión de Supabase usando el sistema de autorización personalizado
             # Esta sesión se almacena en session_state
+            import time
             session_data = {
                 'access_token': f'custom_token_{nip}_{int(time.time())}',
                 'token_type': 'bearer',
