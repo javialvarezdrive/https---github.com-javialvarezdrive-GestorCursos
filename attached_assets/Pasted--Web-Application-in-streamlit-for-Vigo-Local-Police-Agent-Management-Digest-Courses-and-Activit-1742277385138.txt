@@ -1,0 +1,105 @@
+## Web Application in streamlit for Vigo Local Police Agent Management: Digest, Courses, and Activities
+
+**Login Requirement:** The application will require a login page to ensure secure access and user authentication before accessing any functionalities.
+
+**Database:** Supabase will be used as the backend database to manage all application data, including agents, courses, activities, and user information.
+
+**Deployment:** The application will be deployed on Render for accessibility and ease of use.
+
+**Future Development:** It is anticipated that new functionalities will be added and existing features may be modified in the future to continuously improve the application and meet evolving needs.
+
+---
+
+**Objective:** To create a web application for managing Agents, Courses, and Activities for the Vigo Local Police Department.
+
+**Application Structure:** The application will consist of four main screens:
+
+1.  **Activities**
+2.  **Courses**
+3.  **Agents**
+4.  **Statistics**
+
+---
+
+### 1. Agents Page
+
+**Functionality:** This screen will allow for the **CRUD** (Create, Read, Update, Delete) operations for Agents.
+
+**Agent Data Fields:**
+
+*   **NIP (Agent ID):** Agent number. Unique numerical identifier.
+*   **Nombre (Name):** Agent's first name.
+*   **Apellido 1 (Last Name 1):** Agent's first last name.
+*   **Apellido 2 (Last Name 2):** Agent's second last name.
+*   **Sección (Section):**  Indicates the section the agent belongs to. Approximately 20 sections.
+*   **Grupo (Group):** Indicates the group the agent belongs to. From G-0 to G-9.
+*   **Email:** Agent's email address.
+*   **Teléfono (Phone):** Agent's phone number.
+*   **Activo (Active):** Boolean value indicating whether the agent is active or not.
+*   **Monitor (Monitor):** Boolean value indicating whether an agent is a monitor.
+
+**Agent Page Tabs:**
+
+*   **Ver Agentes (View Agents):**
+    *   Displays a Dataframe of Agents.
+    *   Should include a search bar at the top to search for agents by NIP, name, etc. (AJAX type search).
+*   **Añadir Agentes (Add Agents):**
+    *   Form to add new agents.
+    *   "Section" and "Group" fields should be dropdowns for selection.
+    *   Checkboxes to select "Active" and "Monitor" status.
+*   **Editar Agente (Edit Agent):**
+    *   Form to edit existing agent information.
+    *   Include a button to delete the agent.
+
+---
+
+### 2. Courses Page
+
+**Functionality:** This screen will allow for the **CRUD** (Create, Read, Update, Delete) operations for Courses.
+
+**Features:**
+
+*   **Ocultar Curso (Hide Course) Option:**  This option will prevent the course from being displayed in the Activities listing.
+
+---
+
+### 3. Activities Page
+
+**Definition:** An Activity is a Course that a Monitor (Agent with `monitor=true`) schedules on a specific day and shift (morning, afternoon, night).
+
+**Activity Scheduling & Participation:**
+
+*   **Activity Scheduling Restriction:** Only Monitors can schedule activities.
+*   **Participants per Activity:**
+    *   An activity can have multiple agents participating.
+    *   An activity has only one Monitor assigned.
+    *   Activity participants can be both agents with `monitor=false` and agents with `monitor=true`.
+
+**Activity Page Tabs:**
+
+*   **Ver Actividades (View Activities):**
+    *   Displays a Dataframe of scheduled Activities.
+    *   Includes the following information:
+        *   **Fecha (Date):** (DD/MM/YYYY format)
+        *   **Turno (Shift):** (Morning, Afternoon, Night)
+        *   **Curso (Course)**
+        *   **Monitor**
+        *   **Agentes (Agents):** (List of participating agents)
+*   **Añadir Actividad (Add Activity):**
+    *   Form to schedule a new activity.
+    *   Only "Date" and "Shift" are mandatory fields.
+    *   Other values can be added later.
+*   **Asignar Agentes (Assign Agents):**
+    *   Allows assigning participating agents to a specific activity.
+*   **Editar Actividad (Edit Activity):**
+    *   Allows editing or deleting a specific activity.
+
+---
+
+### 4. Statistics Page
+
+**Functionality:**
+
+*   This page should display customized views of the database tables.
+*   Include filters to visualize relevant data regarding agent participation in activities.
+*   Allows for generating insights and reports on activity participation.
