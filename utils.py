@@ -14,30 +14,31 @@ def check_authentication():
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
     
-    if "username" not in st.session_state:
-        st.session_state["username"] = None
+    if "user_nip" not in st.session_state:
+        st.session_state["user_nip"] = None
         
-    if "session_id" not in st.session_state:
-        import time
-        st.session_state["session_id"] = str(int(time.time()))
-        
-    if "user_role" not in st.session_state:
-        st.session_state["user_role"] = None
-        
-    if "need_rerun" not in st.session_state:
-        st.session_state["need_rerun"] = False
-
     if "user_data" not in st.session_state:
         st.session_state["user_data"] = None
 
     if "agent_name" not in st.session_state:
         st.session_state["agent_name"] = None
     
-    # Check if user is authenticated
-    if not st.session_state["authenticated"]:
-        # Redirect to main app for login
+    # Check if user is authenticated and verify with Supabase
+    if not st.session_state["authenticated"] or not st.session_state["user_nip"]:
         st.warning("Por favor, inicia sesión para acceder a esta página.")
         st.stop()
+    else:
+        # Verify session is still valid with Supabase
+        try:
+            user = get_user_by_nip(st.session_state["user_nip"])
+            if not user:
+                st.session_state["authenticated"] = False
+                st.warning("Sesión expirada. Por favor, inicia sesión nuevamente.")
+                st.stop()
+        except Exception as e:
+            st.error(f"Error de autenticación: {str(e)}")
+            st.session_state["authenticated"] = False
+            st.stop()
         
     # Make the session persistent with unique session ID
     # This method uses session state's persistence to maintain login state
