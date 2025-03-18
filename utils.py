@@ -46,13 +46,23 @@ def init_session_state_supabase():
                     email = user.user.email
                     agent_response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("email", email).execute()
                     if agent_response.data:
-                        nip = agent_response.data[0].get('nip')
+                        agent_data = agent_response.data[0]
+                        nip = agent_data.get('nip')
+                        is_monitor = agent_data.get('monitor', False)
+                        
                         st.session_state['user_nip'] = nip
+                        st.session_state['is_monitor'] = is_monitor
                         
                         # Obtener nombre del agente
                         agent_name = get_agent_name(nip)
                         if agent_name and agent_name != "Agente no encontrado" and agent_name != "Error":
                             st.session_state['agent_name'] = agent_name
+                            
+                        # Mostrar mensaje según el rol
+                        if is_monitor:
+                            st.success(f"Bienvenido Monitor {agent_name}")
+                        else:
+                            st.info(f"Bienvenido Agente {agent_name}")
                 except Exception as e:
                     st.warning("Sesión recuperada pero no se pudo obtener información del agente")
         except:
