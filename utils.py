@@ -647,7 +647,7 @@ def check_authentication():
     Check if user is authenticated and ensure session state is properly initialized
     This function ensures a consistent state across all pages
     """
-    # Initialize all session state variables with persistence
+    # Inicializar variables de session_state si no existen
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
     
@@ -660,30 +660,50 @@ def check_authentication():
     if "agent_name" not in st.session_state:
         st.session_state["agent_name"] = None
     
-    # Si no está autenticado, intentamos cargar la sesión desde la cookie
-    if not st.session_state.get("authenticated", False):
-        load_session_from_cookie()
-    
-    # Check if user is authenticated and verify with Supabase
-    if not st.session_state.get("authenticated", False) or not st.session_state.get("user_nip"):
-        st.warning("Por favor, inicia sesión para acceder a esta página.")
-        st.stop()
-    else:
-        # Verify session is still valid with Supabase
+    # Si no está autenticado, intentamos verificar la sesión con Supabase directamente
+    if not st.session_state.get("authenticated") or not st.session_state.get("user_nip"):
         try:
-            user = get_user_by_nip(st.session_state["user_nip"])
-            if not user:
-                clear_session_cookie()
-                st.warning("Sesión expirada. Por favor, inicia sesión nuevamente.")
+            # Utilizar la API nativa de Supabase para verificar la autenticación
+            user = config.supabase.auth.get_user()
+            if user:
+                # Sesión válida encontrada, actualizar session_state
+                st.session_state["authenticated"] = True
+                st.session_state["user_data"] = user.user
+                
+                # Intentar obtener el NIP asociado al email
+                email = user.user.email
+                agent_response = config.supabase.table(config.AGENTS_TABLE).select("*").eq("email", email).execute()
+                if agent_response.data:
+                    nip = agent_response.data[0].get('nip')
+                    st.session_state["user_nip"] = nip
+                    
+                    # Obtener el nombre del agente
+                    agent_name = get_agent_name(nip)
+                    if agent_name and agent_name != "Agente no encontrado" and agent_name != "Error":
+                        st.session_state["agent_name"] = agent_name
+                    else:
+                        st.session_state["agent_name"] = "Usuario"
+            else:
+                # No hay sesión activa
+                st.warning("Por favor, inicia sesión para acceder a esta página.")
                 st.stop()
-            
-            # Si la sesión es válida, guardamos la cookie para futuras visitas
-            save_session_to_cookie()
-            
         except Exception as e:
-            st.error(f"Error de autenticación: {str(e)}")
-            clear_session_cookie()
+            # Error al verificar la sesión
+            st.warning("Sesión no válida. Por favor, inicia sesión.")
+            st.markdown('''
+            <meta http-equiv="refresh" content="2;url=/" />
+            <p>Redirigiendo a la página de inicio de sesión...</p>
+            ''', unsafe_allow_html=True)
             st.stop()
+    
+    # Si llegamos aquí y no tenemos autenticación, mostrar mensaje
+    if not st.session_state.get("authenticated") or not st.session_state.get("user_nip"):
+        st.warning("Por favor, inicia sesión para acceder a esta página.")
+        st.markdown('''
+        <meta http-equiv="refresh" content="2;url=/" />
+        <p>Redirigiendo a la página de inicio de sesión...</p>
+        ''', unsafe_allow_html=True)
+        st.stop()
         
     # Make the session persistent with unique session ID
     # This method uses session state's persistence to maintain login state
