@@ -1,0 +1,168 @@
+Aquí te dejo una guía paso a paso y un ejemplo de código para implementar la persistencia de sesión de Supabase en tu app Streamlit:
+
+Pasos:
+
+Instala la librería de Supabase para Python (si no la tienes):
+
+pip install supabase
+Use code with caution.
+Bash
+Configura tu cliente de Supabase: Necesitarás la URL de tu proyecto Supabase y la API Key anónima (o la service role key si necesitas operaciones más avanzadas). Estas las encuentras en la configuración de tu proyecto Supabase.
+
+Inicializa st.session_state para la sesión de Supabase: Al principio de tu script, verifica si la sesión de Supabase ya existe en st.session_state. Si no, la inicializas a None. También puedes guardar información del usuario logueado aquí.
+
+Función para verificar y establecer la sesión de Supabase desde st.session_state: Crea una función que se ejecute al inicio de cada ejecución del script. Esta función revisará si hay una sesión guardada en st.session_state y la establecerá en el cliente de Supabase.
+
+Implementa el login con Supabase: Crea un formulario de login (email/password) o el método de login que estés usando (social login, etc.). Cuando el login sea exitoso:
+
+Guarda la sesión de Supabase retornada por supabase.auth.sign_in_with_password (o el método que uses) en st.session_state.
+
+También guarda la información del usuario (si la necesitas) en st.session_state.
+
+Redirige al usuario a la parte de la app donde necesita estar logueado.
+
+Implementa el logout: Crea un botón de logout. Cuando se haga clic:
+
+Llama a supabase.auth.sign_out().
+
+Limpia la sesión de Supabase de st.session_state (poniéndola a None).
+
+Limpia también la información del usuario de st.session_state.
+
+Redirige al usuario a la página de login o a la parte pública de la app.
+
+Protege las rutas/páginas que requieren login: Al inicio de cada página o sección de tu app que requiera que el usuario esté logueado, verifica si hay un usuario en st.session_state. Si no hay usuario, redirige a la página de login.
+
+Ejemplo de Código (Login con email y contraseña):
+
+import streamlit as st
+from supabase import create_client, Client
+import os
+
+# --- Configuración de Supabase ---
+SUPABASE_URL = os.environ.get("SUPABASE_URL")  # Reemplaza con tu URL o variable de entorno
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")  # Reemplaza con tu API Key o variable de entorno
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    st.error("Por favor, configura las variables de entorno SUPABASE_URL y SUPABASE_KEY.")
+    st.stop()
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# --- Inicialización de session_state ---
+if 'supabase_session' not in st.session_state:
+    st.session_state['supabase_session'] = None
+if 'user' not in st.session_state:
+    st.session_state['user'] = None
+
+# --- Función para establecer la sesión de Supabase desde session_state ---
+def set_supabase_session_from_state():
+    if st.session_state['supabase_session']:
+        supabase.auth.set_session(st.session_state['supabase_session'])
+    else:
+        # Si no hay sesión en session_state, el usuario no está logueado (o la sesión expiró)
+        pass # No hacemos nada, supabase cliente estará sin sesión
+
+# Ejecutar al inicio para re-establecer la sesión si existe en session_state
+set_supabase_session_from_state()
+
+# --- Funciones de Login/Logout ---
+def login_usuario(email, password):
+    try:
+        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        if response.session: # Login exitoso
+            st.session_state['supabase_session'] = response.session
+            st.session_state['user'] = response.user
+            set_supabase_session_from_state() # Aseguramos que el cliente supabase tenga la sesion actualizada
+            st.success("¡Login exitoso!")
+            return True
+        else: # Login fallido (aunque supabase no suele retornar session=None en fallo, es bueno verificar)
+            st.error("Login fallido. Credenciales incorrectas.")
+            return False
+    except Exception as e:
+        st.error(f"Error al iniciar sesión: {e}")
+        return False
+
+def logout_usuario():
+    try:
+        supabase.auth.sign_out() # Llama a sign_out en Supabase
+        st.session_state['supabase_session'] = None
+        st.session_state['user'] = None
+        st.success("Sesión cerrada.")
+    except Exception as e:
+        st.error(f"Error al cerrar sesión: {e}")
+
+# --- Interfaz de Usuario (Ejemplo) ---
+st.title("Mi App con Supabase y Sesión Persistente")
+
+if st.session_state['user']: # Usuario logueado
+    st.write(f"Bienvenido, {st.session_state['user'].email}!")
+    if st.button("Cerrar Sesión"):
+        logout_usuario()
+        st.experimental_rerun() # Recarga la app para reflejar el cambio de estado
+
+    st.subheader("Contenido para usuarios logueados")
+    st.write("Aquí puedes mostrar contenido que solo los usuarios logueados pueden ver.")
+
+else: # Usuario no logueado
+    st.subheader("Login")
+    email = st.text_input("Email")
+    password = st.text_input("Contraseña", type="password")
+    if st.button("Iniciar Sesión"):
+        if login_usuario(email, password):
+            st.experimental_rerun() # Recarga la app para reflejar el cambio de estado
+
+    st.info("Por favor, inicia sesión para acceder al contenido.")
+
+
+# --- Ejemplo de cómo usar el usuario logueado para consultar datos (opcional) ---
+if st.session_state['user']:
+    st.subheader("Datos de Perfil (Ejemplo)")
+    try:
+        response = supabase.table('profiles').select("*").eq('user_id', st.session_state['user'].id).execute()
+        if response.data:
+            st.write("Información del perfil:")
+            st.write(response.data)
+        else:
+            st.write("No se encontró información de perfil.")
+    except Exception as e:
+        st.error(f"Error al obtener datos del perfil: {e}")
+Use code with caution.
+Python
+Explicación del Código:
+
+Configuración de Supabase: Asegúrate de tener correctamente configuradas SUPABASE_URL y SUPABASE_KEY. Es recomendable usar variables de entorno para no hardcodear las claves en tu código.
+
+st.session_state: Inicializamos st.session_state['supabase_session'] y st.session_state['user'] a None.
+
+set_supabase_session_from_state(): Esta función es clave. Se llama al inicio del script y después de un login exitoso. Verifica si hay una sesión guardada en st.session_state y la aplica al cliente de Supabase usando supabase.auth.set_session(). Esto hace que el cliente de Supabase "recuerde" que el usuario ya está autenticado en cada ejecución del script.
+
+login_usuario(): Realiza el login con supabase.auth.sign_in_with_password(). Si es exitoso, guarda la sesión y el usuario en st.session_state, y llama a set_supabase_session_from_state() para actualizar el cliente de Supabase.
+
+logout_usuario(): Realiza el logout con supabase.auth.sign_out() y limpia la sesión y el usuario de st.session_state.
+
+Condicional if st.session_state['user']:: Controla qué se muestra en la interfaz de usuario según si el usuario está logueado o no.
+
+st.experimental_rerun(): Se usa para recargar la app después de un login o logout para que la interfaz se actualice inmediatamente y refleje el nuevo estado de la sesión.
+
+Para usar este código:
+
+Reemplaza los placeholders de SUPABASE_URL y SUPABASE_KEY con tus credenciales de Supabase. Idealmente, configúralas como variables de entorno.
+
+Ejecuta tu app Streamlit.
+
+Intenta loguearte y luego refresca la página. Deberías permanecer logueado.
+
+Prueba el botón de "Cerrar Sesión". Deberías ser redirigido a la página de login y al refrescar la página seguirás sin sesión.
+
+Puntos Importantes:
+
+Seguridad: En este ejemplo se guarda la sesión de Supabase en st.session_state, que se guarda en el navegador del usuario. Para la mayoría de los casos, esto es suficiente. Si necesitas mayor seguridad (por ejemplo, para información muy sensible), considera usar sesiones del lado del servidor o un manejo de tokens más complejo.
+
+Manejo de Errores: El código incluye algunos bloques try...except para manejar errores de login/logout. Es importante robustecer el manejo de errores en tu app real.
+
+Redirección: st.experimental_rerun() es una forma sencilla de recargar la app. Para aplicaciones más complejas, podrías considerar usar Streamlit's "Routing" (cuando esté más maduro) o bibliotecas de routing externas para un manejo más sofisticado de la navegación.
+
+Tipos de Login: Este ejemplo usa login con email y contraseña. Si usas otros métodos de login de Supabase (social login, magic link, etc.), adapta el código según el método específico y cómo Supabase retorna la sesión.
+
+Con este código y explicación, deberías poder solucionar el problema de la sesión al refrescar en tu app Streamlit con Supabase. Si tienes alguna pregunta más específica o necesitas ayuda con algo en particular, ¡no dudes en preguntar!

@@ -7,14 +7,159 @@ import string
 import os
 import json
 import base64
-import pickle
-from cryptography.fernet import Fernet
 
-# Nuevo enfoque: guardar credenciales encriptadas en el sistema de archivos
-# para persistencia entre sesiones
-
-# Archivo para guardar credenciales
+# Constantes para la gestión de sesión Supabase
 SESSION_FILE = '.streamlit/saved_session.json'
+
+# --- Funciones para manejo de sesión con Supabase ---
+def init_session_state_supabase():
+    """
+    Inicializa las variables de estado de sesión para Supabase
+    """
+    if 'supabase_session' not in st.session_state:
+        st.session_state['supabase_session'] = None
+    if 'authenticated' not in st.session_state:
+        st.session_state['authenticated'] = False
+    if 'user_nip' not in st.session_state:
+        st.session_state['user_nip'] = None
+    if 'user_data' not in st.session_state:
+        st.session_state['user_data'] = None
+    if 'agent_name' not in st.session_state:
+        st.session_state['agent_name'] = None
+    if 'session_id' not in st.session_state:
+        import time
+        st.session_state['session_id'] = str(int(time.time()))
+
+def set_supabase_session_from_state():
+    """
+    Establece la sesión de Supabase desde session_state
+    """
+    if st.session_state.get('supabase_session'):
+        try:
+            # Intentar restablecer la sesión en el cliente de Supabase
+            config.supabase.auth.set_session(st.session_state['supabase_session'])
+            return True
+        except Exception as e:
+            # Si hay algún error (token expirado, etc.), limpiar la sesión
+            st.warning(f"La sesión ha expirado: {str(e)}")
+            clear_supabase_session()
+            return False
+    return False
+
+def sign_in_with_nip(nip, password):
+    """
+    Inicia sesión con NIP y contraseña usando la API de Supabase
+    
+    En lugar de usar email/password estándar, usamos una tabla personalizada
+    para la autenticación con NIP (ID del agente)
+    """
+    try:
+        # Verificar credenciales contra tabla users personalizada
+        user = get_user_by_nip(nip)
+        if not user:
+            return False, "Agente no encontrado"
+            
+        # Verificar la contraseña
+        if user.get('password') == password:
+            # Crear una sesión de Supabase usando el sistema de autorización personalizado
+            # Esta sesión se almacena en session_state
+            session_data = {
+                'access_token': f'custom_token_{nip}_{int(time.time())}',
+                'token_type': 'bearer',
+                'expires_in': 3600,
+                'refresh_token': f'refresh_{nip}_{int(time.time())}',
+                'user': {
+                    'id': nip,
+                    'app_metadata': {
+                        'provider': 'custom',
+                        'providers': ['custom']
+                    },
+                    'user_metadata': {
+                        'nip': nip,
+                        'name': get_agent_name(nip)
+                    },
+                    'aud': 'authenticated',
+                    'role': 'authenticated'
+                }
+            }
+            
+            # Guardar la sesión en session_state
+            st.session_state['supabase_session'] = session_data
+            st.session_state['authenticated'] = True
+            st.session_state['user_nip'] = nip
+            st.session_state['user_data'] = user
+            
+            # Obtener nombre del agente
+            try:
+                agent_name = get_agent_name(nip)
+                if agent_name != "Agente no encontrado" and agent_name != "Error":
+                    st.session_state.agent_name = agent_name
+                else:
+                    st.session_state.agent_name = f"Agente {nip}"
+            except:
+                st.session_state.agent_name = f"Agente {nip}"
+            
+            # Generar un nuevo ID de sesión
+            import time
+            st.session_state.session_id = str(int(time.time()))
+            
+            return True, user
+        else:
+            return False, "Contraseña incorrecta"
+    except Exception as e:
+        st.error(f"Error al verificar credenciales: {str(e)}")
+        return False, "Error de autenticación"
+
+def clear_supabase_session():
+    """
+    Cierra la sesión de Supabase y limpia session_state
+    """
+    # Limpiar cliente de Supabase
+    try:
+        config.supabase.auth.sign_out()
+    except:
+        pass
+    
+    # Limpiar variables de sesión
+    st.session_state['supabase_session'] = None
+    st.session_state['authenticated'] = False
+    st.session_state['user_nip'] = None
+    st.session_state['user_data'] = None
+    st.session_state['agent_name'] = None
+    
+    # Mensaje informativo
+    st.success("Sesión cerrada correctamente")
+
+def check_supabase_auth():
+    """
+    Verifica si hay una sesión activa y válida
+    Devuelve True si está autenticado, False si no
+    """
+    # Inicializar variables de session_state si no existen
+    init_session_state_supabase()
+    
+    # Si ya está autenticado, verificar que la sesión siga siendo válida
+    if st.session_state.get('authenticated') and st.session_state.get('user_nip'):
+        # Verificar que el cliente de Supabase tenga la sesión establecida
+        if not set_supabase_session_from_state():
+            # Si no se pudo establecer la sesión, verificar con la tabla users
+            try:
+                user = get_user_by_nip(st.session_state.get('user_nip'))
+                if user:
+                    # La sesión sigue siendo válida
+                    return True
+                else:
+                    # La sesión ya no es válida
+                    clear_supabase_session()
+                    return False
+            except:
+                # Error al verificar, limpiar sesión
+                clear_supabase_session()
+                return False
+        return True
+    
+    # No hay sesión activa
+    return False
 
 def save_credentials(nip, password, remember=False):
     """Guarda las credenciales en un archivo JSON y cookies si remember=True"""
