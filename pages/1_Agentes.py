@@ -176,6 +176,9 @@ with tab3:
             agent_data = agents_df[agents_df['nip'] == selected_nip].iloc[0].to_dict()
             
             # Create form for editing
+            # Delete button outside the form
+            delete_button = st.button("Eliminar Agente", type="secondary")
+            
             with st.form("edit_agent_form"):
                 col1, col2 = st.columns(2)
                 
@@ -195,11 +198,7 @@ with tab3:
                     activo = st.checkbox("Activo", agent_data['activo'])
                     monitor = st.checkbox("Monitor", agent_data['monitor'])
                 
-                col1, col2 = st.columns(2)
-                with col1:
-                    submit_button = st.form_submit_button("Actualizar Agente")
-                with col2:
-                    delete_button = st.form_submit_button("Eliminar Agente", type="secondary")
+                submit_button = st.form_submit_button("Actualizar Agente")
                 
                 if submit_button:
                     # Validate form data
