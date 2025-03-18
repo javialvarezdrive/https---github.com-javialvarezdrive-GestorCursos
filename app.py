@@ -18,8 +18,7 @@ st.set_page_config(
 
 # Initialize all session state variables
 def init_session_state():
-    if 'dark_mode' not in st.session_state:
-        st.session_state.dark_mode = False
+    # No longer using dark mode - using theme from config.toml
     # Generate a persistent session ID
     if 'session_id' not in st.session_state:
         # Generate a unique session ID for this session
@@ -31,6 +30,15 @@ def init_session_state():
 
     if 'username' not in st.session_state:
         st.session_state.username = None
+        
+    if 'user_nip' not in st.session_state:
+        st.session_state.user_nip = None
+        
+    if 'user_data' not in st.session_state:
+        st.session_state.user_data = None
+        
+    if 'agent_name' not in st.session_state:
+        st.session_state.agent_name = None
 
     if 'password_recovery' not in st.session_state:
         st.session_state.password_recovery = False
@@ -42,6 +50,11 @@ def init_session_state():
     # User role and permissions (for future use)
     if 'user_role' not in st.session_state:
         st.session_state.user_role = None
+        
+    # Intentar cargar la sesión de cookies - solo si no estamos autenticados
+    if not st.session_state.authenticated:
+        # Llamamos a load_session_from_cookie pero sin rerun para evitar bucles
+        utils.load_session_from_cookie()
 
 # Initialize all session state variables
 init_session_state()
