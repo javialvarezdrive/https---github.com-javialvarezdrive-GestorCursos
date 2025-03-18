@@ -39,14 +39,12 @@ with tab_lista:
         
         # Recopilar datos para filtros
         for _, activity in activities_df.iterrows():
-            # Obtener nombre del curso
+            # Obtener nombre del curso usando la función de utilidad
             try:
                 if activity['curso_id']:
-                    curso_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", activity['curso_id']).execute()
-                    if curso_response.data and len(curso_response.data) > 0:
-                        curso_nombre = curso_response.data[0].get('nombre', 'Sin nombre')
-                        if curso_nombre and curso_nombre not in cursos:
-                            cursos.append(curso_nombre)
+                    curso_nombre = utils.get_course_name(activity['curso_id'])
+                    if curso_nombre and curso_nombre not in cursos and curso_nombre not in ["Sin curso asignado", "Curso no encontrado", "Error al obtener datos"]:
+                        cursos.append(curso_nombre)
             except Exception as e:
                 print(f"Error al obtener curso para filtros: {str(e)}")
                 
