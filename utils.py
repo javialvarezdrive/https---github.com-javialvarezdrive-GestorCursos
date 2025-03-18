@@ -743,6 +743,7 @@ def setup_sidebar():
     """
     Configura la barra lateral para todas las páginas.
     Agrega el botón de cerrar sesión y oculta la palabra 'Navegación'.
+    Si el usuario está autenticado, también oculta el enlace a login.
     """
     # Agregar botón de cerrar sesión en la barra lateral
     with st.sidebar:
@@ -757,6 +758,22 @@ def setup_sidebar():
             """,
             unsafe_allow_html=True
         )
+        
+        # Si está autenticado, ocultar enlace a login en el sidebar
+        is_authenticated = check_supabase_auth()
+        if is_authenticated:
+            # CSS para ocultar el enlace a login
+            st.markdown(
+                """
+                <style>
+                /* Ocultar Login en sidebar cuando el usuario está autenticado */
+                section[data-testid="stSidebar"] li:has(a[href="/"]) {
+                    display: none !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
         
         # Agregar espacio al final de la barra lateral
         st.markdown("---")  # Separador
