@@ -62,61 +62,66 @@ with tab1:
         grupos_disponibles = agents_df['grupo'].dropna().unique().tolist()
         grupos_disponibles.sort()
         
-        # Inicializar key para resetear filtros
-        if "reset_filters" not in st.session_state:
-            st.session_state.reset_filters = False
-        
-        # Fila para el botón de limpiar filtros y el cuadro de búsqueda
-        col_btn, col_search = st.columns([1, 3])
-        
-        with col_btn:
-            if st.button("🔄 Limpiar filtros", key="clean_filters"):
-                st.session_state.reset_filters = True
-                st.rerun()
-        
-        with col_search:
-            # Search functionality with dynamic behavior
-            search_query = st.text_input(
-                "Buscar agente por NIP, nombre, apellidos, email, teléfono...",
-                placeholder="El filtro se aplica mientras escribes...",
-                key="agent_search",
-                # Limpiar el campo de búsqueda si se ha pulsado el botón de limpiar filtros
-                value="" if st.session_state.reset_filters else st.session_state.get("agent_search", ""),
-                on_change=lambda: None,  # Esto fuerza la reejecución cuando se escribe
-            )
+        # Inicializar filtros
+        if "filtro_secciones" not in st.session_state:
+            st.session_state.filtro_secciones = []
+            
+        if "filtro_grupos" not in st.session_state:
+            st.session_state.filtro_grupos = []
+            
+        if "filtro_activo" not in st.session_state:
+            st.session_state.filtro_activo = False
+            
+        if "filtro_monitor" not in st.session_state:
+            st.session_state.filtro_monitor = False
+            
+        if "agent_search" not in st.session_state:
+            st.session_state.agent_search = ""
         
         # Crear filtros en un expander (colapsado por defecto)
         with st.expander("Filtros avanzados", expanded=False):
-            # Columnas para los filtros
-            col1, col2 = st.columns(2)
+            # Primera fila de filtros
+            col1, col2, col3 = st.columns(3)
             
             with col1:
-                # Valores predeterminados para los multiselect
-                default_secciones = [] if st.session_state.reset_filters else st.session_state.get("filtro_secciones", [])
-                
                 # Multiselect para filtrar por sección
                 filtro_secciones = st.multiselect(
                     "Filtrar por sección", 
                     ["Todas"] + secciones_disponibles, 
-                    default=default_secciones,
+                    default=st.session_state.get("filtro_secciones", []),
                     key="filtro_secciones"
                 )
             
             with col2:
-                # Valores predeterminados para los multiselect
-                default_grupos = [] if st.session_state.reset_filters else st.session_state.get("filtro_grupos", [])
-                
                 # Multiselect para filtrar por grupo
                 filtro_grupos = st.multiselect(
                     "Filtrar por grupo", 
                     ["Todos"] + grupos_disponibles, 
-                    default=default_grupos,
+                    default=st.session_state.get("filtro_grupos", []),
                     key="filtro_grupos"
                 )
                 
-            # Resetear el estado después de aplicar
-            if st.session_state.reset_filters:
-                st.session_state.reset_filters = False
+            with col3:
+                # Checkboxes para activo y monitor
+                col3a, col3b = st.columns(2)
+                with col3a:
+                    filtro_activo = st.checkbox("Solo activos", 
+                                               value=st.session_state.get("filtro_activo", False),
+                                               key="filtro_activo")
+                with col3b:
+                    filtro_monitor = st.checkbox("Solo monitores", 
+                                               value=st.session_state.get("filtro_monitor", False),
+                                               key="filtro_monitor")
+            
+            # Segunda fila para el campo de búsqueda
+            # Search functionality with dynamic behavior
+            search_query = st.text_input(
+                "Buscar agente por NIP, nombre, apellidos, email, teléfono...",
+                placeholder="El filtro se aplica mientras escribes...",
+                value=st.session_state.get("agent_search", ""),
+                key="agent_search",
+                on_change=lambda: None,  # Esto fuerza la reejecución cuando se escribe
+            )
         
         # Aplicar filtros y rastrear qué filtros están activos
         filtered_df = agents_df.copy()
@@ -131,6 +136,16 @@ with tab1:
         if "Todos" not in filtro_grupos and filtro_grupos:
             filtered_df = filtered_df[filtered_df['grupo'].isin(filtro_grupos)]
             filtros_activos.append(f"Grupo: {', '.join(filtro_grupos)}")
+            
+        # Filtrar por activo
+        if filtro_activo:
+            filtered_df = filtered_df[filtered_df['activo'] == True]
+            filtros_activos.append("Solo agentes activos")
+            
+        # Filtrar por monitor
+        if filtro_monitor:
+            filtered_df = filtered_df[filtered_df['monitor'] == True]
+            filtros_activos.append("Solo monitores")
         
         # Apply search filter if provided (dynamic instant search)
         if search_query:
