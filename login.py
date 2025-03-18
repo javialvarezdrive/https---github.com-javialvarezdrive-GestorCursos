@@ -86,7 +86,7 @@ def main():
         # Intentar recuperar sesión desde credenciales guardadas
         if not st.session_state.password_recovery:
             # Si no estamos en recuperación de contraseña, mostrar formulario de login
-            st.title("👮‍♂️ Acceso al Sistema")
+            st.title("")
             st.subheader("Iniciar Sesión")
 
             # Función para procesar el login

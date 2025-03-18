@@ -1,0 +1,49 @@
+import streamlit as st
+import utils  # Asumo que aquí tienes funciones de autenticación
+
+def main():
+    # ... (tu código de inicialización y título) ...
+
+    is_authenticated = utils.check_supabase_auth() # o como determines si está autenticado
+
+    # Interfaz de usuario según el estado de autenticación
+    if not is_authenticated:
+        # ... (código para mostrar el formulario de login) ...
+        pass
+    else:
+        # Usuario autenticado - Mostrar interfaz principal y SIDEBAR CONDICIONAL
+        with st.sidebar:
+            st.markdown("### Navegación")
+
+            # --- ELEMENTOS DEL SIDEBAR SIEMPRE VISIBLES (LOGUEADO O NO) ---
+            st.markdown("Menú General")
+            st.button("Página de Inicio") # Ejemplo de página siempre visible
+
+            # --- ELEMENTOS DEL SIDEBAR SOLO VISIBLES SI ESTÁ LOGUEADO ---
+            if is_authenticated: # O st.session_state.authenticated si lo usas así
+                st.markdown("---")
+                st.markdown("Menú de Usuario Autenticado")
+                st.button("Agentes")
+                st.button("Cursos")
+                st.button("Actividades")
+                # ... otros elementos solo para usuarios logueados ...
+
+                # Botón de cierre de sesión (solo visible si logueado)
+                def logout():
+                    utils.clear_supabase_session()
+                    utils.clear_saved_credentials()
+                    st.session_state.need_rerun = True
+                if st.button("Cerrar Sesión", on_click=logout):
+                    pass
+            else:
+                # --- ELEMENTOS DEL SIDEBAR SOLO VISIBLES SI NO ESTÁ LOGUEADO (opcional) ---
+                st.markdown("---")
+                st.markdown("Menú de Invitado")
+                st.write("Por favor, inicia sesión para acceder a más opciones.")
+                # Podrías poner un botón "Iniciar Sesión" aquí (aunque ya tienes el formulario principal)
+                # st.button("Iniciar Sesión") # Ejemplo opcional para sidebar de invitado
+
+        # ... (código para mostrar el contenido principal de la página después del login) ...
+
+if __name__ == "__main__":
+    main()
