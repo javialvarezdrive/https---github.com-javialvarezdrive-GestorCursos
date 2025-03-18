@@ -15,22 +15,25 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Authentication function
-def setup_authentication():
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
+# Setup session state variables
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+if 'username' not in st.session_state:
+    st.session_state.username = None
+
+if 'password_recovery' not in st.session_state:
+    st.session_state.password_recovery = False
+
+# Main function
+def main():
+    # Add a title
+    st.title("👮‍♂️ Policía Local de Vigo")
     
-    if 'username' not in st.session_state:
-        st.session_state.username = None
-    
-    # Check for stored credentials
-    try:
-        response = config.supabase.table(config.USERS_TABLE).select("*").execute()
-        users_data = response.data
-        
-        if not users_data:
-            # If no users found, set up a default user
-            st.warning("No se encontraron usuarios en la base de datos. Se utilizará un usuario por defecto.")
+    # If not authenticated, show login or password recovery
+    if not st.session_state.authenticated:
+        if not st.session_state.password_recovery:
+            # Set up default credentials
             credentials = {
                 'usernames': {
                     'admin': {
@@ -39,60 +42,58 @@ def setup_authentication():
                     }
                 }
             }
-        else:
-            # Create credentials from users in database
-            credentials = {'usernames': {}}
-            for user in users_data:
-                credentials['usernames'][user['username']] = {
-                    'name': user['name'],
-                    'password': user['password']
-                }
-        
-        # Create the authenticator object
-        authenticator = stauth.Authenticate(
-            credentials,
-            cookie_name="vigo_police_app",
-            key="vigo_police_auth",
-            cookie_expiry_days=30
-        )
-        
-        # Set up login form with custom fields
-        st.subheader("Iniciar Sesión")
-        
-        # Manually build a login form
-        with st.form("login_form"):
-            username = st.text_input("Usuario")
-            password = st.text_input("Contraseña", type="password")
-            submitted = st.form_submit_button("Acceder")
             
-            if submitted:
-                # Validate credentials directly
-                if username in credentials['usernames']:
-                    # Para la contraseña hashed almacenada, necesitamos verificarla de otra manera
-                    # por ahora, permitamos el acceso de admin para pruebas
-                    if username == "admin" and password == "password":
-                        st.session_state.authenticated = True
-                        st.session_state.username = username
-                        return authenticator
+            # Try to load users from database
+            try:
+                response = config.supabase.table(config.USERS_TABLE).select("*").execute()
+                users_data = response.data
+                
+                if users_data:
+                    # Add database users to credentials
+                    for user in users_data:
+                        if 'username' in user and 'name' in user and 'password' in user:
+                            credentials['usernames'][user['username']] = {
+                                'name': user['name'],
+                                'password': user['password']
+                            }
+            except Exception as e:
+                st.warning(f"Error al cargar usuarios: {str(e)}. Se utilizará el usuario por defecto.")
+            
+            # Show login form
+            st.subheader("Iniciar Sesión")
+            
+            # Manually build a login form
+            with st.form("login_form"):
+                username = st.text_input("Usuario")
+                password = st.text_input("Contraseña", type="password")
+                submitted = st.form_submit_button("Acceder")
+                
+                if submitted:
+                    # Validate credentials directly
+                    if username in credentials['usernames']:
+                        # Para la contraseña hashed almacenada, necesitamos verificarla de otra manera
+                        # por ahora, permitamos el acceso de admin para pruebas
+                        if username == "admin" and password == "password":
+                            st.session_state.authenticated = True
+                            st.session_state.username = username
+                            st.rerun()
+                        else:
+                            st.error("Contraseña incorrecta")
                     else:
-                        st.error("Contraseña incorrecta")
-                else:
-                    st.error("Usuario no encontrado")
-        
-        # Password recovery section
-        st.markdown("---")
-        st.subheader("¿Olvidaste tu contraseña?")
-        
-        # Check if we're in password recovery mode
-        if "password_recovery" not in st.session_state:
-            st.session_state.password_recovery = False
+                        st.error("Usuario no encontrado")
             
-        if not st.session_state.password_recovery:
+            # Password recovery section
+            st.markdown("---")
+            st.subheader("¿Olvidaste tu contraseña?")
+            
             if st.button("Recuperar contraseña"):
                 st.session_state.password_recovery = True
                 st.rerun()
+                
         else:
             # Password recovery form
+            st.subheader("Recuperación de Contraseña")
+            
             with st.form("recovery_form"):
                 recovery_username = st.text_input("NIP (Número de Identificación Personal)")
                 recovery_email = st.text_input("Email registrado")
@@ -113,26 +114,11 @@ def setup_authentication():
             if st.button("Volver al inicio de sesión"):
                 st.session_state.password_recovery = False
                 st.rerun()
-        
-    except Exception as e:
-        st.error(f"Error de autenticación: {str(e)}")
     
-    return None
-
-# Main function
-def main():
-    # Add a title
-    st.title("👮‍♂️ Policía Local de Vigo")
-    
-    # If not authenticated, show the login form
-    if not st.session_state.get('authenticated', False):
-        authenticator = setup_authentication()
-        if authenticator:
-            st.success(f"Bienvenido, {st.session_state.username}!")
-            st.rerun()
     else:
         # Show the main page after authentication
-        st.write("## Bienvenido al Sistema de Gestión de Agentes, Cursos y Actividades")
+        st.write(f"## Bienvenido, {st.session_state.username}")
+        st.write("## Sistema de Gestión de Agentes, Cursos y Actividades")
         
         # Show information about the app
         st.write("""
