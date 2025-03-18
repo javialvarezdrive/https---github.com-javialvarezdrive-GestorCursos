@@ -106,13 +106,14 @@ with tab1:
             if st.session_state.reset_filters:
                 st.session_state.reset_filters = False
         
-        # Search functionality with AJAX-like behavior
+        # Search functionality with dynamic behavior
         search_query = st.text_input(
             "Buscar agente por NIP, nombre, apellidos, email, teléfono...",
-            placeholder="El filtro se aplica al escribir",
+            placeholder="El filtro se aplica mientras escribes...",
             key="agent_search",
             # Limpiar el campo de búsqueda si se ha pulsado el botón de limpiar filtros
-            value="" if st.session_state.reset_filters else st.session_state.get("agent_search", "")
+            value="" if st.session_state.reset_filters else st.session_state.get("agent_search", ""),
+            on_change=lambda: None,  # Esto fuerza la reejecución cuando se escribe
         )
         
         # Aplicar filtros y rastrear qué filtros están activos
@@ -129,7 +130,7 @@ with tab1:
             filtered_df = filtered_df[filtered_df['grupo'].isin(filtro_grupos)]
             filtros_activos.append(f"Grupo: {', '.join(filtro_grupos)}")
         
-        # Apply search filter if provided (AJAX-like instant search)
+        # Apply search filter if provided (dynamic instant search)
         if search_query:
             search_query = search_query.lower()
             # Usar una máscara para la búsqueda para ser más eficiente
