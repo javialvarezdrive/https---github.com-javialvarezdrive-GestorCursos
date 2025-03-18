@@ -831,6 +831,21 @@ def get_agent_name(nip):
     except Exception as e:
         st.error(f"Error al obtener el nombre del agente: {str(e)}")
         return "Error"
+        
+def get_course_name(course_id):
+    """Get course name by ID"""
+    if course_id is None:
+        return "Sin curso asignado"
+    
+    try:
+        course_response = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("id", course_id).execute()
+        
+        if course_response.data and len(course_response.data) > 0:
+            return course_response.data[0]['nombre']
+        return "Curso no encontrado"
+    except Exception as e:
+        st.error(f"Error al obtener el nombre del curso: {str(e)}")
+        return "Error al obtener datos"
 
 def validate_agent(nip, nombre, apellido1, email, telefono):
     """Validate agent data"""

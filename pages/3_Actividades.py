@@ -347,7 +347,8 @@ with tab_editar:
             # Format date
             fecha_formatted = utils.format_date(activity['fecha'])
             
-            option_text = f"{activity['id']} - {fecha_formatted} - {activity['turno']} - {curso_nombre}"
+            # Guardar el ID internamente pero no mostrarlo en la interfaz
+            option_text = f"{fecha_formatted} - {activity['turno']} - {curso_nombre}"
             activity_options.append((option_text, activity['id']))
         
         # Dropdown to select activity
