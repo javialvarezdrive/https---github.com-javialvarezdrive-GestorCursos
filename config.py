@@ -9,7 +9,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # App configuration
-APP_NAME = "Policía Local de Vigo - Gestión de Agentes"
+APP_NAME = "Gestión de Cursos y Actividades"
 
 # Theme configurations
 LIGHT_THEME = {
