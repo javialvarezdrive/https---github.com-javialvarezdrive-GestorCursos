@@ -286,20 +286,8 @@ def main():
         # Ocultar la página principal cuando el usuario inicia sesión
         st.empty()  # Reemplazar el contenido principal con un espacio vacío
         
-        # Sidebar para navegación
-        with st.sidebar:
-            # Modo claro configurado en .streamlit/config.toml
-            
-            # Botón de cierre de sesión
-            def logout():
-                # Usar el método nativo de Supabase para cerrar sesión
-                utils.clear_supabase_session()
-                utils.clear_saved_credentials(
-                )  # Limpiar credenciales guardadas locales
-                st.session_state.need_rerun = True
-
-            if st.button("Cerrar Sesión", on_click=logout, use_container_width=True):
-                pass
+        # Configurar el sidebar con el botón de cierre de sesión
+        utils.setup_sidebar()
 
         # La página principal se ocultará después de la autenticación
         # No mostramos contenido para dirigir al usuario a usar las pestañas

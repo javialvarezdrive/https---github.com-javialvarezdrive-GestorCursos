@@ -739,6 +739,39 @@ def format_bool(value):
         return "No"
     return value
 
+def setup_sidebar():
+    """
+    Configura la barra lateral para todas las páginas.
+    Agrega el botón de cerrar sesión y oculta la palabra 'Navegación'.
+    """
+    # Agregar botón de cerrar sesión en la barra lateral
+    with st.sidebar:
+        # Ocultar la palabra "Navegación" que viene por defecto
+        st.markdown(
+            """
+            <style>
+            .css-1aumxhk {
+                display: none !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Agregar espacio al final de la barra lateral
+        st.markdown("---")  # Separador
+        
+        # Función para cerrar sesión
+        def logout():
+            clear_supabase_session()
+            clear_saved_credentials()
+            # Redirigir a la página principal
+            st.session_state.need_rerun = True
+            
+        # Agregar botón de cierre de sesión
+        if st.button("Cerrar Sesión", key="logout_sidebar_btn", on_click=logout, use_container_width=True):
+            pass
+
 def get_all_agents(active_only=False):
     """Get all agents from database"""
     try:
