@@ -115,80 +115,108 @@ with tab3:
             # Get course data
             course_data = courses_df[courses_df['nombre'] == selected_course].iloc[0].to_dict()
             
-            # Create form for editing
-            with st.form("edit_course_form"):
-                course_id = course_data['id']
-                nombre = st.text_input("Nombre del Curso *", course_data['nombre'])
-                descripcion = st.text_area("Descripción *", course_data['descripcion'])
-                ocultar = st.checkbox("Ocultar Curso", course_data['ocultar'])
+            # Inicializar variables de estado para el modo de confirmación
+            if "confirm_delete" not in st.session_state:
+                st.session_state.confirm_delete = False
+                
+            if "course_to_delete_id" not in st.session_state:
+                st.session_state.course_to_delete_id = None
+                
+            if "course_to_delete_name" not in st.session_state:
+                st.session_state.course_to_delete_name = None
+            
+            # Si está en modo de confirmación de eliminación
+            if st.session_state.confirm_delete:
+                st.warning(f"¿Estás seguro de que deseas eliminar el curso '{st.session_state.course_to_delete_name}'?")
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    submit_button = st.form_submit_button("Actualizar Curso")
-                with col2:
-                    delete_button = st.form_submit_button("Eliminar Curso", type="secondary")
-                
-                if submit_button:
-                    # Validate form data
-                    validation_errors = utils.validate_course(nombre, descripcion)
-                    
-                    if validation_errors:
-                        for error in validation_errors:
-                            st.error(error)
-                    else:
-                        # Check if course name already exists (if changed)
+                    if st.button("Sí, eliminar"):
                         try:
-                            if nombre != course_data['nombre']:
-                                existing_course = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("nombre", nombre).execute()
-                                
-                                if existing_course.data:
-                                    st.error(f"Ya existe un curso con el nombre '{nombre}'")
-                                    st.stop()
+                            # Check if course is used in any activity
+                            activities = config.supabase.table(config.ACTIVITIES_TABLE).select("id").eq("curso_id", st.session_state.course_to_delete_id).execute()
                             
-                            # Prepare updated data
-                            updated_data = {
-                                'nombre': nombre,
-                                'descripcion': descripcion,
-                                'ocultar': ocultar
-                            }
-                            
-                            # Update data
-                            result = config.supabase.table(config.COURSES_TABLE).update(updated_data).eq("id", course_id).execute()
-                            
-                            if result.data:
-                                st.success(f"Curso '{nombre}' actualizado correctamente")
+                            if activities.data:
+                                st.error("No se puede eliminar el curso porque está siendo utilizado en actividades")
                             else:
-                                st.error("Error al actualizar el curso")
+                                # Delete course
+                                result = config.supabase.table(config.COURSES_TABLE).delete().eq("id", st.session_state.course_to_delete_id).execute()
+                                
+                                if result.data:
+                                    st.success(f"Curso '{st.session_state.course_to_delete_name}' eliminado correctamente")
+                                    # Limpiar modo de confirmación
+                                    st.session_state.confirm_delete = False
+                                    st.session_state.course_to_delete_id = None
+                                    st.session_state.course_to_delete_name = None
+                                    st.rerun()
+                                else:
+                                    st.error("Error al eliminar el curso")
                         except Exception as e:
                             st.error(f"Error: {str(e)}")
                 
-                if delete_button:
-                    # Delete course confirmation
-                    st.warning(f"¿Estás seguro de que deseas eliminar el curso '{nombre}'?")
+                with col2:
+                    if st.button("No, cancelar"):
+                        # Limpiar modo de confirmación
+                        st.session_state.confirm_delete = False
+                        st.session_state.course_to_delete_id = None
+                        st.session_state.course_to_delete_name = None
+                        st.rerun()
+            
+            # Si no está en modo de confirmación, mostrar el formulario de edición
+            else:
+                # Create form for editing
+                with st.form("edit_course_form"):
+                    course_id = course_data['id']
+                    nombre = st.text_input("Nombre del Curso *", course_data['nombre'])
+                    descripcion = st.text_area("Descripción *", course_data['descripcion'])
+                    ocultar = st.checkbox("Ocultar Curso", course_data['ocultar'])
                     
-                    # Create confirmation buttons
                     col1, col2 = st.columns(2)
                     with col1:
-                        if st.button("Sí, eliminar"):
+                        submit_button = st.form_submit_button("Actualizar Curso")
+                    with col2:
+                        delete_button = st.form_submit_button("Eliminar Curso", type="secondary")
+                    
+                    if submit_button:
+                        # Validate form data
+                        validation_errors = utils.validate_course(nombre, descripcion)
+                        
+                        if validation_errors:
+                            for error in validation_errors:
+                                st.error(error)
+                        else:
+                            # Check if course name already exists (if changed)
                             try:
-                                # Check if course is used in any activity
-                                activities = config.supabase.table(config.ACTIVITIES_TABLE).select("id").eq("curso_id", course_id).execute()
-                                
-                                if activities.data:
-                                    st.error("No se puede eliminar el curso porque está siendo utilizado en actividades")
-                                else:
-                                    # Delete course
-                                    result = config.supabase.table(config.COURSES_TABLE).delete().eq("id", course_id).execute()
+                                if nombre != course_data['nombre']:
+                                    existing_course = config.supabase.table(config.COURSES_TABLE).select("nombre").eq("nombre", nombre).execute()
                                     
-                                    if result.data:
-                                        st.success(f"Curso '{nombre}' eliminado correctamente")
-                                        st.rerun()
-                                    else:
-                                        st.error("Error al eliminar el curso")
+                                    if existing_course.data:
+                                        st.error(f"Ya existe un curso con el nombre '{nombre}'")
+                                        st.stop()
+                                
+                                # Prepare updated data
+                                updated_data = {
+                                    'nombre': nombre,
+                                    'descripcion': descripcion,
+                                    'ocultar': ocultar
+                                }
+                                
+                                # Update data
+                                result = config.supabase.table(config.COURSES_TABLE).update(updated_data).eq("id", course_id).execute()
+                                
+                                if result.data:
+                                    st.success(f"Curso '{nombre}' actualizado correctamente")
+                                    st.rerun()
+                                else:
+                                    st.error("Error al actualizar el curso")
                             except Exception as e:
                                 st.error(f"Error: {str(e)}")
-                    with col2:
-                        if st.button("No, cancelar"):
-                            st.rerun()
+                    
+                    if delete_button:
+                        # Preparar el modo de confirmación
+                        st.session_state.confirm_delete = True
+                        st.session_state.course_to_delete_id = course_id
+                        st.session_state.course_to_delete_name = nombre
+                        st.rerun()
     else:
         st.warning("No hay cursos disponibles para editar.")
